@@ -1,0 +1,10 @@
+hatch==1.7.0
+neovim==0.3.1
+
+ruff==0.5.3
+python-lsp-server==1.11.0
+python-lsp-ruff==2.2.0
+
+remote-pdb==2.1.0
+
+mypy==1.11.0

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytest-typing-runner-test-driver"
+dynamic = ["version"]
+license = { text = "MIT" }
+authors = [
+    { name = "Stephen Moore", email = "stephen@delfick.com" },
+]
+
+[tool.hatch.version]
+path = "pytest_typing_runner_test_driver/version.py"
+
+[tool.hatch.build.targets.wheel]
+include = [
+    "/pytest_typing_runner_test_driver",
+]
