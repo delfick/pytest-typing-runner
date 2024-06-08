@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytest-typing-runner"
+dynamic = ["version"]
+description = "Pytest plugin to make it easier to run and check python code against static type checkers"
+readme = "README.rst"
+license = { text = "MIT" }
+requires-python = ">= 3.10"
+authors = [
+    { name = "Stephen Moore", email = "stephen@delfick.com" },
+]
+
+
+[project.optional-dependencies]
+tests = [
+    "pytest==8.2.2",
+]
+
+[tool.hatch.version]
+path = "pytest_typing_runner/version.py"
+
+[tool.hatch.build.targets.wheel]
+include = [
+    "/pytest_typing_runner",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 99
+extend-exclude = [
+    ".DS_Store",
+    ".pytest_cache",
+    "tools/.python",
+    "tools/deps",
+    "__pycache__",
+]
+
+[tool.ruff.lint]
+select = [
+    "B008",  # mutable objects as function argument defaults
+    "B015",  # flake8-bugbear (useless-comparison)
+    "I",  # isort
+    "T20",  # flake8-print
+    "UP",  # pyupgrade
+    "RUF",
+    "F",
+]
