@@ -1,6 +1,6 @@
 from . import protocols
 from .protocols import ScenarioHookMaker, ScenarioMaker
-from .scenario import RunnerConfig, Scenario, ScenarioHook
+from .scenario import RunnerConfig, Scenario, ScenarioHook, ScenarioRunner, ScenarioRuns
 
 __all__ = [
     "protocols",
@@ -9,4 +9,6 @@ __all__ = [
     "RunnerConfig",
     "Scenario",
     "ScenarioHook",
+    "ScenarioRunner",
+    "ScenarioRuns",
 ]
