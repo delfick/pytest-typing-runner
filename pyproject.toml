@@ -19,6 +19,9 @@ tests = [
     "pytest==8.2.2",
 ]
 
+[project.entry-points.pytest11]
+pytest_typing_runner = "pytest_typing_runner.collect"
+
 [tool.hatch.version]
 path = "pytest_typing_runner/version.py"
 
