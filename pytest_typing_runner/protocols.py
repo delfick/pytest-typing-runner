@@ -286,6 +286,45 @@ class Scenario(Protocol):
         """
 
 
+class ScenarioRunner(Protocol[T_Scenario]):
+    """
+    Used to facilitate the running and testing of a type checker run.
+
+    A default implementation is provided by ``pytest_typing_runner.ScenarioRunner``
+
+    The ``typing_scenario_runner`` fixture can be defined to return the exact concrete
+    implementation to use for a particular scope.
+    """
+
+    @property
+    def scenario(self) -> T_Scenario:
+        """
+        The scenario under test
+        """
+
+    @property
+    def scenario_hook(self) -> ScenarioHook[T_Scenario]:
+        """
+        The hooks for the scenario
+        """
+
+    def file_modification(self, path: str, content: str | None) -> None:
+        """
+        Used to change a file on disk
+
+        Implementations should forward this to scenario_hook.file_modification
+        """
+
+    def run_and_check_static_type_checking(self) -> None:
+        """
+        Used to do a run of a type checker and check against the provided expectations
+
+        Implementations should use the hooks on the scenario_hook object, ensure that
+        a run is added to scenario.runs, and execute a followup if the run was the first
+        and the options ask for a followup.
+        """
+
+
 class ScenarioMaker(Protocol[T_CO_Scenario]):
     """
     Represents an object that creates Scenario objects
@@ -312,6 +351,18 @@ class ScenarioHookMaker(Protocol[T_Scenario]):
     ) -> ScenarioHook[T_Scenario]: ...
 
 
+class ScenarioRunnerMaker(Protocol[T_Scenario]):
+    """
+    Represents an object that creates Scenario Runner objects
+
+    The default implementation of ``ScenarioRunner`` already satisfies this protocol.
+    """
+
+    def __call__(
+        self, *, scenario: T_Scenario, scenario_hook: ScenarioHook[T_Scenario]
+    ) -> ScenarioRunner[T_Scenario]: ...
+
+
 if TYPE_CHECKING:
     P_Scenario = Scenario
 
@@ -323,5 +374,6 @@ if TYPE_CHECKING:
     P_ScenarioRuns = ScenarioRuns[P_Scenario]
     P_ScenarioMaker = ScenarioMaker[P_Scenario]
     P_ScenarioHookMaker = ScenarioHookMaker[P_Scenario]
+    P_ScenarioRunnerMaker = ScenarioRunnerMaker[P_Scenario]
 
     _SM: ScenarioMaker[Scenario] = Scenario.create

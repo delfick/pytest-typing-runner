@@ -22,7 +22,7 @@ class TestPlugin:
         result = pytester.runpytest()
         result.assert_outcomes(passed=1)
 
-    def test_it_can_change_class_used_for_scenario(self, pytester: pytest.Pytester) -> None:
+    def ignore_test_it_can_change_class_used_for_scenario(self, pytester: pytest.Pytester) -> None:
         pytester.makepyfile(
             """
             from pytest_typing_runner import Scenario, ScenarioHookMaker

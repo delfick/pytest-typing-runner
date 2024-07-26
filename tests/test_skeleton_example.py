@@ -2,12 +2,21 @@ import typing
 
 import pytest
 
-from pytest_typing_runner import Scenario, ScenarioHook, protocols
+from pytest_typing_runner import Scenario, ScenarioHook, ScenarioRunner, protocols
+
+
+def test_it_works(typing_runner_scenario: ScenarioRunner[Scenario]) -> None:
+    assert isinstance(typing_runner_scenario, ScenarioRunner)
+    assert isinstance(typing_runner_scenario.scenario, Scenario)
+    assert isinstance(typing_runner_scenario.scenario_hook, ScenarioHook)
 
 
 class TestOther:
     class MyScenario(Scenario):
-        def some_functionality(self) -> None: ...
+        info: int = 1
+
+        def some_functionality(self) -> None:
+            self.info = 2
 
     class MyScenarioHook(ScenarioHook[MyScenario]):
         def prepare_scenario(self) -> None:
@@ -26,5 +35,9 @@ class TestOther:
     def typing_scenario_hook_maker(self) -> protocols.ScenarioHookMaker[MyScenario]:
         return self.MyScenarioHook
 
-    def test_it_works(self, typing_runner_scenario: MyScenario) -> None:
-        assert isinstance(typing_runner_scenario, self.MyScenario)
+    def test_it_works(self, typing_runner_scenario: ScenarioRunner[MyScenario]) -> None:
+        assert isinstance(typing_runner_scenario, ScenarioRunner)
+        assert isinstance(typing_runner_scenario.scenario, self.MyScenario)
+        assert isinstance(typing_runner_scenario.scenario_hook, self.MyScenarioHook)
+
+        assert typing_runner_scenario.scenario.info == 2

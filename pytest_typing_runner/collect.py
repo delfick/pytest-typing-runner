@@ -6,7 +6,7 @@ import pytest
 from _pytest.config.argparsing import Parser
 
 from . import protocols
-from .scenario import RunnerConfig, Scenario, ScenarioHook
+from .scenario import RunnerConfig, Scenario, ScenarioHook, ScenarioRunner
 
 
 @pytest.fixture
@@ -38,25 +38,31 @@ def typing_scenario_hook_maker() -> protocols.ScenarioHookMaker[Scenario]:
 
 
 @pytest.fixture
+def typing_scenario_runner_maker() -> protocols.ScenarioRunnerMaker[Scenario]:
+    return ScenarioRunner
+
+
+@pytest.fixture
 def typing_runner_scenario(
     typing_runner_config: RunnerConfig,
     typing_scenario_kls: type[protocols.T_Scenario],
     typing_scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
     typing_scenario_hook_maker: protocols.ScenarioHookMaker[protocols.T_Scenario],
+    typing_scenario_runner_maker: protocols.ScenarioRunnerMaker[protocols.T_Scenario],
     request: pytest.FixtureRequest,
     tmp_path: pathlib.Path,
-) -> Iterator[protocols.T_Scenario]:
+) -> Iterator[protocols.ScenarioRunner[protocols.T_Scenario]]:
     """
     Pytest fixture used to get a typing scenario helper and manage cleanup
     """
     hook = typing_scenario_hook_maker(
         config=typing_runner_config, root_dir=tmp_path, Scenario=typing_scenario_maker
     )
-    request.node.user_properties.append(("typing_runner", hook.scenario))
+    request.node.user_properties.append(("typing_runner", hook))
 
     hook.prepare_scenario()
     try:
-        yield hook.scenario
+        yield typing_scenario_runner_maker(scenario=hook.scenario, scenario_hook=hook)
     finally:
         hook.cleanup_scenario()
 

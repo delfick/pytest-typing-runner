@@ -154,12 +154,25 @@ class Scenario:
         )
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ScenarioRunner(Generic[protocols.T_Scenario]):
+    scenario: protocols.T_Scenario
+    scenario_hook: protocols.ScenarioHook[protocols.T_Scenario]
+
+    def file_modification(self, path: str, content: str | None) -> None:
+        raise NotImplementedError()
+
+    def run_and_check_static_type_checking(self) -> None:
+        raise NotImplementedError()
+
+
 if TYPE_CHECKING:
     C_Scenario = Scenario
     C_RunnerConfig = RunnerConfig
     C_ScenarioRun = ScenarioRun[C_Scenario]
     C_ScenarioRuns = ScenarioRuns[C_Scenario]
     C_ScenarioHook = ScenarioHook[C_Scenario]
+    C_ScenarioRunner = ScenarioRunner[C_Scenario]
 
     _RC: protocols.P_RunnerConfig = cast(C_RunnerConfig, None)
 
@@ -169,3 +182,5 @@ if TYPE_CHECKING:
     _CSH: protocols.ScenarioHook[C_Scenario] = cast(C_ScenarioHook, None)
     _CSM: protocols.ScenarioMaker[C_Scenario] = C_Scenario.create
     _CSHM: protocols.ScenarioHookMaker[C_Scenario] = C_ScenarioHook
+    _CSRU: protocols.ScenarioRunner[C_Scenario] = cast(C_ScenarioRunner, None)
+    _CSRM: protocols.ScenarioRunnerMaker[C_Scenario] = C_ScenarioRunner
