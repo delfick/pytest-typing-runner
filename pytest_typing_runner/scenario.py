@@ -78,6 +78,7 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
     is_followup: bool
     scenario: protocols.T_Scenario
     options: protocols.RunOptions[protocols.T_Scenario]
+    result: protocols.RunResult[protocols.T_Scenario]
     expectation_error: Exception | None
     file_modifications: Sequence[tuple[str, str]]
 
@@ -89,6 +90,10 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
             yield "> [followup run]"
 
         yield "| exit_code={self.result.exit_code}"
+        for line in self.result.stdout.split("\n"):
+            yield f"| stdout: {line}"
+        for line in self.result.stderr.split("\n"):
+            yield f"| stderr: {line}"
         if self.expectation_error:
             yield "!!! {self.expectation_error}"
 

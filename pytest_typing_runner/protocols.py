@@ -41,6 +41,60 @@ class RunOptions(Protocol[T_Scenario]):
     scenario: T_Scenario
 
 
+class RunResult(Protocol[T_Scenario]):
+    """
+    Used to represent the options used to run a type checker and the result from doing so
+    """
+
+    @property
+    def scenario(self) -> T_Scenario:
+        """
+        The scenario that is being tested
+        """
+
+    @property
+    def typing_strategy(self) -> Strategy:
+        """
+        The cache strategy this was run with
+        """
+
+    @property
+    def cwd(self) -> pathlib.Path:
+        """
+        The path the command was run inside
+        """
+
+    @property
+    def runner(self) -> Runner[T_Scenario]:
+        """
+        The object used to run the type checker
+        """
+
+    @property
+    def args(self) -> Sequence[str]:
+        """
+        The list of arguments provided to the type checker
+        """
+
+    @property
+    def exit_code(self) -> int:
+        """
+        The exit code from running the type checker
+        """
+
+    @property
+    def stdout(self) -> str:
+        """
+        The stdout from running the type checker
+        """
+
+    @property
+    def stderr(self) -> str:
+        """
+        The stderr from running the type checker
+        """
+
+
 class RunnerConfig(Protocol):
     """
     An object to represent all the options relevant to this pytest plugin
@@ -62,6 +116,22 @@ class RunnerConfig(Protocol):
         Set by the --typing-strategy option.
 
         Used to know what type checker should be used and how.
+        """
+
+
+class Runner(Protocol[T_Scenario]):
+    """
+    Used to run the static type checker
+    """
+
+    def run(self, options: RunOptions[T_Scenario]) -> RunResult[T_Scenario]:
+        """
+        Run the static type checker and return a result
+        """
+
+    def short_display(self) -> str:
+        """
+        Return a string to represent the command that was run
         """
 
 
@@ -133,6 +203,12 @@ class ScenarioRun(Protocol[T_Scenario]):
     def options(self) -> RunOptions[T_Scenario]:
         """
         The options that were used for the run
+        """
+
+    @property
+    def result(self) -> RunResult[T_Scenario]:
+        """
+        The result from running the type checker
         """
 
     @property
@@ -238,7 +314,10 @@ class ScenarioHookMaker(Protocol[T_Scenario]):
 
 if TYPE_CHECKING:
     P_Scenario = Scenario
+
+    P_RunResult = RunResult[P_Scenario]
     P_RunnerConfig = RunnerConfig
+    P_Runner = Runner[P_Scenario]
     P_ScenarioHook = ScenarioHook[P_Scenario]
     P_ScenarioRun = ScenarioRun[P_Scenario]
     P_ScenarioRuns = ScenarioRuns[P_Scenario]
