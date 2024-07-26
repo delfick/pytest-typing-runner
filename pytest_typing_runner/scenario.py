@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
+import shutil
 from collections.abc import Iterator, MutableSequence, Sequence
 from typing import TYPE_CHECKING, Generic, cast
 
-from typing_extensions import Self
+from typing_extensions import Self, assert_never
 
-from . import protocols
+from . import protocols, runner
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -45,17 +46,6 @@ class ScenarioHook(Generic[protocols.T_Scenario]):
     def scenario(self) -> protocols.T_Scenario:
         return self._scenario
 
-    def prepare_scenario(self) -> None:
-        """
-        Called when the scenario has been created. This method may do any mutations it
-        wants on self.scenario
-        """
-
-    def cleanup_scenario(self) -> None:
-        """
-        Called after the test is complete. This method may do anything it wants for cleanup
-        """
-
     @property
     def runs(self) -> protocols.ScenarioRuns[protocols.T_Scenario]:
         return self._runs
@@ -64,7 +54,77 @@ class ScenarioHook(Generic[protocols.T_Scenario]):
         """
         Used to create the object that will represent information about the type checker runs
         """
-        return ScenarioRuns(scenario=self._scenario)
+        return ScenarioRuns(scenario=self.scenario)
+
+    def prepare_scenario(self) -> None:
+        """
+        Default implementation does not need to do any extra preparation
+        """
+
+    def cleanup_scenario(self) -> None:
+        """
+        Default implementation does not need to do any extra cleanup
+        """
+
+    def determine_options(self) -> protocols.RunOptions[protocols.T_Scenario]:
+        """
+        Default implementation uses the plugin config to determine the bare essential options
+        """
+        cwd = self.scenario.root_dir
+        run: protocols.Runner[protocols.T_Scenario]
+
+        if self.scenario.typing_strategy is protocols.Strategy.MYPY_INCREMENTAL:
+            if self.scenario.same_process:
+                run = runner.SameProcessMypyRunner()
+            else:
+                run = runner.ExternalMypyRunner()
+            args = ["--incremental"]
+            do_followup = True
+        elif self.scenario.typing_strategy is protocols.Strategy.MYPY_NO_INCREMENTAL:
+            if self.scenario.same_process:
+                run = runner.SameProcessMypyRunner()
+            else:
+                run = runner.ExternalMypyRunner()
+            args = ["--no-incremental"]
+            do_followup = False
+        elif self.scenario.typing_strategy is protocols.Strategy.MYPY_DAEMON:
+            run = runner.ExternalDaemonMypyRunner()
+            args = ["run", "--"]
+            do_followup = True
+        else:
+            assert_never(self.scenario.typing_strategy)
+
+        return runner.RunOptions(
+            scenario=self.scenario,
+            typing_strategy=self.scenario.typing_strategy,
+            runner=run,
+            cwd=cwd,
+            args=args,
+            do_followup=do_followup,
+        )
+
+    def before_static_type_checking(self) -> None:
+        """
+        Default implementation has nothing to do before options are determined
+        """
+
+    def execute_static_checking(
+        self, options: protocols.RunOptions[protocols.T_Scenario]
+    ) -> protocols.RunResult[protocols.T_Scenario]:
+        """
+        Default implementation returns the result of running the runner on options with those options
+        """
+        return options.runner.run(options)
+
+    def check_results(
+        self,
+        result: protocols.RunResult[protocols.T_Scenario],
+        expectations: protocols.Expectations[protocols.T_Scenario],
+    ) -> None:
+        """
+        Default implementation uses the expectations to match against the results
+        """
+        expectations.validate_result(result)
 
     def add_to_pytest_report(self, name: str, sections: list[tuple[str, str]]) -> None:
         """
@@ -72,6 +132,28 @@ class ScenarioHook(Generic[protocols.T_Scenario]):
         """
         if self.runs.has_runs:
             sections.append((name, "\n".join(self.runs.for_report())))
+
+    def file_modification(self, path: str, content: str | None) -> None:
+        location = self.scenario.root_dir / path
+        if not location.is_relative_to(self.scenario.root_dir):
+            raise ValueError("Tried to modify a file outside of the test root")
+
+        if location.exists():
+            if content is None:
+                action = "delete"
+                shutil.rmtree(location)
+            else:
+                action = "change"
+                location.write_text(content)
+        else:
+            if content is None:
+                action = "already_deleted"
+            else:
+                action = "create"
+                location.parent.mkdir(parents=True, exist_ok=True)
+                location.write_text(content)
+
+        self.runs.add_file_modification(path, action)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -95,6 +177,8 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
 
         if self.is_followup:
             yield "> [followup run]"
+        else:
+            yield f"> {self.options.runner.short_display()} {' '.join(self.options.args)}"
 
         yield "| exit_code={self.result.exit_code}"
         for line in self.result.stdout.split("\n"):
@@ -188,12 +272,35 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
     scenario_hook: protocols.ScenarioHook[protocols.T_Scenario]
 
     def file_modification(self, path: str, content: str | None) -> None:
-        raise NotImplementedError()
+        self.scenario_hook.file_modification(path, content)
 
     def run_and_check_static_type_checking(
         self, expectations: protocols.Expectations[protocols.T_Scenario]
     ) -> None:
-        raise NotImplementedError()
+        self.scenario_hook.before_static_type_checking()
+        options = self.scenario_hook.determine_options()
+        result = self.scenario_hook.execute_static_checking(options)
+
+        try:
+            self.scenario_hook.check_results(result, expectations)
+        except Exception as err:
+            self.scenario_hook.runs.add_run(
+                options=options,
+                result=result,
+                expectations=expectations,
+                expectation_error=err,
+            )
+            raise
+        else:
+            run = self.scenario_hook.runs.add_run(
+                options=options,
+                result=result,
+                expectations=expectations,
+                expectation_error=None,
+            )
+
+        if options.do_followup and run.is_first:
+            self.run_and_check_static_type_checking(expectations)
 
 
 if TYPE_CHECKING:
@@ -207,7 +314,6 @@ if TYPE_CHECKING:
     _RC: protocols.P_RunnerConfig = cast(C_RunnerConfig, None)
 
     _CS: protocols.P_Scenario = cast(C_Scenario, None)
-    _CR: protocols.ScenarioRun[C_Scenario] = cast(C_ScenarioRun, None)
     _CSR: protocols.ScenarioRuns[C_Scenario] = cast(C_ScenarioRuns, None)
     _CSH: protocols.ScenarioHook[C_Scenario] = cast(C_ScenarioHook, None)
     _CSM: protocols.ScenarioMaker[C_Scenario] = C_Scenario.create

@@ -174,6 +174,38 @@ class ScenarioHook(Protocol[T_Scenario]):
         Called after the test is complete. This method may do anything it wants for cleanup
         """
 
+    def determine_options(self) -> RunOptions[T_Scenario]:
+        """
+        Called to determine what to run the type checker with
+        """
+
+    def before_static_type_checking(self) -> None:
+        """
+        Ran before options are determined for doing type checking
+        """
+
+    def execute_static_checking(self, options: RunOptions[T_Scenario]) -> RunResult[T_Scenario]:
+        """
+        Called to use the run options to run a type checker and get a result
+        """
+
+    def add_to_pytest_report(self, name: str, sections: list[tuple[str, str]]) -> None:
+        """
+        Used to add a section to the pytest report
+        """
+
+    def file_modification(self, path: str, content: str | None) -> None:
+        """
+        Used to modify a file for the scenario and record it on scenario.runs
+        """
+
+    def check_results(
+        self, result: RunResult[T_Scenario], expectations: Expectations[T_Scenario]
+    ) -> None:
+        """
+        Called to apply the expectations to the result from running a type checker
+        """
+
 
 class ScenarioRun(Protocol[T_Scenario]):
     """

@@ -3,34 +3,34 @@ import textwrap
 
 import pytest
 
-from pytest_typing_runner.scenario import Scenario
+from pytest_typing_runner.scenario import ScenarioHook
 
 
 class TestPlugin:
-    def ignore_test_it_can_create_scenario_fixture(self, pytester: pytest.Pytester) -> None:
+    def test_it_can_create_scenario_fixture(self, pytester: pytest.Pytester) -> None:
         pytester.makepyfile(
             """
-            from pytest_typing_runner import Scenario, RunnerConfig, ScenarioHook
+            from pytest_typing_runner import Scenario, RunnerConfig, ScenarioHook, ScenarioRunner
 
-            def test_has_scenario(typing_runner_scenario: Scenario) -> None:
-                assert isinstance(typing_runner_scenario, Scenario)
+            def test_has_scenario(typing_runner_scenario: ScenarioRunner[Scenario]) -> None:
+                assert isinstance(typing_runner_scenario, ScenarioRunner)
+                assert isinstance(typing_runner_scenario.scenario, Scenario)
                 assert isinstance(typing_runner_scenario.scenario_hook, ScenarioHook)
-                assert isinstance(typing_runner_scenario.config, RunnerConfig)
         """
         )
 
         result = pytester.runpytest()
         result.assert_outcomes(passed=1)
 
-    def ignore_test_it_can_change_class_used_for_scenario(self, pytester: pytest.Pytester) -> None:
+    def test_it_can_change_class_used_for_scenario(self, pytester: pytest.Pytester) -> None:
         pytester.makepyfile(
             """
-            from pytest_typing_runner import Scenario, ScenarioHookMaker
+            from pytest_typing_runner import Scenario, ScenarioHookMaker, ScenarioRunner
             import pytest
 
 
-            def test_has_scenario(typing_runner_scenario: Scenario) -> None:
-                assert typing_runner_scenario.__class__  is Scenario
+            def test_has_scenario(typing_runner_scenario: ScenarioRunner[Scenario]) -> None:
+                assert typing_runner_scenario.scenario.__class__ is Scenario
 
             class TestOne:
                 class MyScenario(Scenario):
@@ -40,8 +40,8 @@ class TestPlugin:
                 def typing_scenario_kls(self) -> type[MyScenario]:
                     return self.MyScenario
 
-                def test_has_scenario(self, typing_runner_scenario: "TestOne.MyScenario") -> None:
-                    assert isinstance(typing_runner_scenario, self.MyScenario)
+                def test_has_scenario(self, typing_runner_scenario: "ScenarioRunner[TestOne.MyScenario]") -> None:
+                    assert isinstance(typing_runner_scenario.scenario, self.MyScenario)
 
             class TestTwo:
                 class MyScenario2(Scenario):
@@ -51,27 +51,25 @@ class TestPlugin:
                 def typing_scenario_kls(self) -> type[MyScenario2]:
                     return self.MyScenario2
 
-                def test_has_scenario(self, typing_runner_scenario: "TestTwo.MyScenario2") -> None:
-                    assert isinstance(typing_runner_scenario, self.MyScenario2)
+                def test_has_scenario(self, typing_runner_scenario: "ScenarioRunner[TestTwo.MyScenario2]") -> None:
+                    assert isinstance(typing_runner_scenario.scenario, self.MyScenario2)
 
-            def test_has_scenario_again(typing_runner_scenario: Scenario) -> None:
-                assert typing_runner_scenario.__class__  is Scenario
+            def test_has_scenario_again(typing_runner_scenario: ScenarioRunner[Scenario]) -> None:
+                assert typing_runner_scenario.scenario.__class__ is Scenario
         """
         )
 
         result = pytester.runpytest()
         result.assert_outcomes(passed=4)
 
-    def ignore_test_it_can_change_class_used_for_scenario_hook(
-        self, pytester: pytest.Pytester
-    ) -> None:
+    def test_it_can_change_class_used_for_scenario_hook(self, pytester: pytest.Pytester) -> None:
         pytester.makepyfile(
             """
-            from pytest_typing_runner import Scenario, ScenarioHook, ScenarioHookMaker
+            from pytest_typing_runner import Scenario, ScenarioHook, ScenarioHookMaker, ScenarioRunner
             import pytest
 
 
-            def test_has_scenario(typing_runner_scenario: Scenario) -> None:
+            def test_has_scenario(typing_runner_scenario: ScenarioRunner[Scenario]) -> None:
                 assert typing_runner_scenario.scenario_hook.__class__ is ScenarioHook
 
             class TestOne:
@@ -82,7 +80,7 @@ class TestPlugin:
                 def typing_scenario_hook_maker(self) -> ScenarioHookMaker[Scenario]:
                     return self.MyScenarioHook
 
-                def test_has_scenario(self, typing_runner_scenario: Scenario) -> None:
+                def test_has_scenario(self, typing_runner_scenario: ScenarioRunner[Scenario]) -> None:
                     assert isinstance(typing_runner_scenario.scenario_hook, self.MyScenarioHook)
 
             class TestTwo:
@@ -93,10 +91,10 @@ class TestPlugin:
                 def typing_scenario_hook_maker(self) -> type[MyScenarioHook2]:
                     return self.MyScenarioHook2
 
-                def test_has_scenario(self, typing_runner_scenario: Scenario) -> None:
+                def test_has_scenario(self, typing_runner_scenario: ScenarioRunner[Scenario]) -> None:
                     assert isinstance(typing_runner_scenario.scenario_hook, self.MyScenarioHook2)
 
-            def test_has_scenario_again(typing_runner_scenario: Scenario) -> None:
+            def test_has_scenario_again(typing_runner_scenario: ScenarioRunner[Scenario]) -> None:
                 assert typing_runner_scenario.scenario_hook.__class__ is ScenarioHook
         """
         )
@@ -147,16 +145,18 @@ class TestPlugin:
         """)
 
         pytester.makepyfile(f"""
-        from pytest_typing_runner import Scenario, ScenarioHook, ScenarioHookMaker
+        from pytest_typing_runner import Scenario, ScenarioHook, ScenarioHookMaker, ScenarioRunner
         import pytest
 
+        Runner = ScenarioRunner[Scenario]
 
-        def test_one(typing_runner_scenario: Scenario) -> None:
+
+        def test_one(typing_runner_scenario: Runner) -> None:
             with open("{log}", 'a') as fle:
                 print("test_one", file=fle)
 
         class TestOne:
-            def test_two(self, typing_runner_scenario: Scenario) -> None:
+            def test_two(self, typing_runner_scenario: Runner) -> None:
                 with open("{log}", 'a') as fle:
                     print("test_two", file=fle)
 
@@ -165,11 +165,11 @@ class TestPlugin:
                 assert True
 
             class TestThree:
-                def test_four(self, typing_runner_scenario: Scenario) -> None:
+                def test_four(self, typing_runner_scenario: Runner) -> None:
                     with open("{log}", 'a') as fle:
                         print("test_four", file=fle)
 
-        def test_five(typing_runner_scenario: Scenario) -> None:
+        def test_five(typing_runner_scenario: Runner) -> None:
             with open("{log}", 'a') as fle:
                 print("test_five", file=fle)
         """)
@@ -199,63 +199,66 @@ class TestPlugin:
             """).lstrip()
         )
 
-    def ignore_test_it_adds_a_report_section_for_failed_tests(
+    def test_it_adds_a_report_section_for_failed_tests(
         self, pytester: pytest.Pytester, tmp_path: pathlib.Path
     ) -> None:
         pytester.makeconftest("""
-        from pytest_typing_runner import Scenario, protocols
+        from pytest_typing_runner import Scenario, ScenarioHook, protocols, ScenarioRuns
+        from collections.abc import Iterator
         import dataclasses
         import pathlib
         import pytest
 
 
-        class Runs:
-            def __init__(self) -> None:
-                self._lines: list[str] = []
+        @dataclasses.dataclass(frozen=True, kw_only=True)
+        class Runs(ScenarioRuns):
+            _lines: list[str] = dataclasses.field(init=False, default_factory=list)
 
-            def __str__(self) -> str:
-                return '\\n'.join(self._lines)
-
-            def __bool__(self) -> bool:
+            @property
+            def has_runs(self) -> bool:
                 return bool(self._lines)
+
+            def for_report(self) -> Iterator[str]:
+                yield from self._lines
 
             def add(self, *lines: str) -> None: 
                 self._lines.extend(lines)
 
 
-        @dataclasses.dataclass(kw_only=True)
-        class MyScenario(Scenario):
-            runs: protocols.ScenarioRuns = dataclasses.field(init=False, default_factory=Runs)
-
+        class MyScenarioHook(ScenarioHook[Scenario]):
+            def create_scenario_runs(self) -> protocols.ScenarioRuns[Scenario]:
+                return Runs(scenario=self.scenario)
 
         @pytest.fixture()
-        def typing_scenario_kls() -> type[MyScenario]:
-            return MyScenario
+        def typing_scenario_hook_maker() -> protocols.ScenarioHookMaker[Scenario]:
+            return MyScenarioHook
         """)
 
         pytester.makepyfile("""
-        from conftest import MyScenario
+        from pytest_typing_runner import ScenarioRunner, Scenario
         import pytest
 
+        Scenario = ScenarioRunner[Scenario]
 
-        def test_one(typing_runner_scenario: MyScenario) -> None:
-            typing_runner_scenario.runs.add("one", "two", "three")
+
+        def test_one(typing_runner_scenario: Scenario) -> None:
+            typing_runner_scenario.scenario_hook.runs.add("one", "two", "three")
             raise AssertionError("NO")
 
         class TestOne:
-            def test_two(self, typing_runner_scenario: MyScenario) -> None:
-                typing_runner_scenario.runs.add("four", "five")
+            def test_two(self, typing_runner_scenario: Scenario) -> None:
+                typing_runner_scenario.scenario_hook.runs.add("four", "five")
 
         class TestTwo:
             def test_three(self) -> None:
                 raise AssertionError("No")
 
             class TestThree:
-                def test_four(self, typing_runner_scenario: MyScenario) -> None:
-                    typing_runner_scenario.runs.add("six", "seven")
+                def test_four(self, typing_runner_scenario: Scenario) -> None:
+                    typing_runner_scenario.scenario_hook.runs.add("six", "seven")
                     raise AssertionError("NO")
 
-        def test_five(typing_runner_scenario: MyScenario) -> None:
+        def test_five(typing_runner_scenario: Scenario) -> None:
             raise AssertionError("No")
         """)
 
@@ -274,7 +277,7 @@ class TestPlugin:
             if not report.passed:
                 for name, val in report.user_properties:
                     if name == "typing_runner":
-                        assert isinstance(val, Scenario)
+                        assert isinstance(val, ScenarioHook)
                         found = True
 
                 if not found:
