@@ -5,11 +5,6 @@ import pytest
 from pytest_typing_runner import Scenario, ScenarioHook, protocols
 
 
-def test_it_works(typing_runner_scenario: Scenario) -> None:
-    assert isinstance(typing_runner_scenario, Scenario)
-    assert isinstance(typing_runner_scenario.scenario_hook, ScenarioHook)
-
-
 class TestOther:
     class MyScenario(Scenario):
         def some_functionality(self) -> None: ...
@@ -20,7 +15,7 @@ class TestOther:
 
     if typing.TYPE_CHECKING:
         # Let our type checker tell us if we satisfy the maker protocols
-        _MS: protocols.ScenarioMaker[MyScenario] = MyScenario
+        _MS: protocols.ScenarioMaker[MyScenario] = MyScenario.create
         _MSH: protocols.ScenarioHookMaker[MyScenario] = MyScenarioHook
 
     @pytest.fixture
@@ -33,4 +28,3 @@ class TestOther:
 
     def test_it_works(self, typing_runner_scenario: MyScenario) -> None:
         assert isinstance(typing_runner_scenario, self.MyScenario)
-        assert isinstance(typing_runner_scenario.scenario_hook, self.MyScenarioHook)

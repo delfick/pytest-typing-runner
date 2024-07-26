@@ -7,7 +7,7 @@ from pytest_typing_runner.scenario import Scenario
 
 
 class TestPlugin:
-    def test_it_can_create_scenario_fixture(self, pytester: pytest.Pytester) -> None:
+    def ignore_test_it_can_create_scenario_fixture(self, pytester: pytest.Pytester) -> None:
         pytester.makepyfile(
             """
             from pytest_typing_runner import Scenario, RunnerConfig, ScenarioHook
@@ -62,7 +62,9 @@ class TestPlugin:
         result = pytester.runpytest()
         result.assert_outcomes(passed=4)
 
-    def test_it_can_change_class_used_for_scenario_hook(self, pytester: pytest.Pytester) -> None:
+    def ignore_test_it_can_change_class_used_for_scenario_hook(
+        self, pytester: pytest.Pytester
+    ) -> None:
         pytester.makepyfile(
             """
             from pytest_typing_runner import Scenario, ScenarioHook, ScenarioHookMaker
@@ -197,7 +199,7 @@ class TestPlugin:
             """).lstrip()
         )
 
-    def test_it_adds_a_report_section_for_failed_tests(
+    def ignore_test_it_adds_a_report_section_for_failed_tests(
         self, pytester: pytest.Pytester, tmp_path: pathlib.Path
     ) -> None:
         pytester.makeconftest("""

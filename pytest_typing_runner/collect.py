@@ -27,9 +27,9 @@ def typing_scenario_kls() -> type[Scenario]:
 
 @pytest.fixture
 def typing_scenario_maker(
-    typing_scenario_kls: protocols.ScenarioMaker[protocols.T_Scenario],
+    typing_scenario_kls: type[protocols.T_Scenario],
 ) -> protocols.ScenarioMaker[protocols.T_Scenario]:
-    return typing_scenario_kls
+    return typing_scenario_kls.create
 
 
 @pytest.fixture
@@ -68,8 +68,8 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
     """
     if report.when == "call" and report.outcome == "failed":
         for name, val in report.user_properties:
-            if isinstance(val, Scenario) and val.runs:
-                report.sections.append((name, str(val.runs)))
+            if isinstance(val, ScenarioHook):
+                val.add_to_pytest_report(name, report.sections)
 
 
 def pytest_addoption(parser: Parser) -> None:

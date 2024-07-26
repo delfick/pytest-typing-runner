@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
+from collections.abc import Iterator, MutableSequence, Sequence
 from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self
@@ -31,9 +32,12 @@ class ScenarioHook(Generic[protocols.T_Scenario]):
         root_dir: pathlib.Path,
         Scenario: protocols.ScenarioMaker[protocols.T_Scenario],
     ) -> None:
-        self.config = config
-        self.root_dir = root_dir
-        self.scenario = Scenario(config=config, root_dir=root_dir, scenario_hook=self)
+        self._scenario = Scenario(config=config, root_dir=root_dir)
+        self._runs = self.create_scenario_runs()
+
+    @property
+    def scenario(self) -> protocols.T_Scenario:
+        return self._scenario
 
     def prepare_scenario(self) -> None:
         """
@@ -46,27 +50,84 @@ class ScenarioHook(Generic[protocols.T_Scenario]):
         Called after the test is complete. This method may do anything it wants for cleanup
         """
 
+    @property
+    def runs(self) -> protocols.ScenarioRuns[protocols.T_Scenario]:
+        return self._runs
 
-class ScenarioRuns:
+    def create_scenario_runs(self) -> protocols.ScenarioRuns[protocols.T_Scenario]:
+        """
+        Used to create the object that will represent information about the type checker runs
+        """
+        return ScenarioRuns(scenario=self._scenario)
+
+    def add_to_pytest_report(self, name: str, sections: list[tuple[str, str]]) -> None:
+        """
+        Default implementation adds a section with the provided name if there were runs to report
+        """
+        if self.runs.has_runs:
+            sections.append((name, "\n".join(self.runs.for_report())))
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ScenarioRun(Generic[protocols.T_Scenario]):
+    """
+    Default implementation of the protocols.ScenarioRun
+    """
+
+    is_first: bool
+    is_followup: bool
+    scenario: protocols.T_Scenario
+    options: protocols.RunOptions[protocols.T_Scenario]
+    expectation_error: Exception | None
+    file_modifications: Sequence[tuple[str, str]]
+
+    def for_report(self) -> Iterator[str]:
+        for path, action in self.file_modifications:
+            yield f" * {action:10s}: {path}"
+
+        if self.is_followup:
+            yield "> [followup run]"
+
+        yield "| exit_code={self.result.exit_code}"
+        if self.expectation_error:
+            yield "!!! {self.expectation_error}"
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ScenarioRuns(Generic[protocols.T_Scenario]):
     """
     Default implementation of the protocols.ScenarioRuns.
     """
 
-    def __init__(self) -> None:
-        self._runs: list[str] = []
+    scenario: protocols.T_Scenario
+    _runs: MutableSequence[protocols.ScenarioRun[protocols.T_Scenario]] = dataclasses.field(
+        init=False, default_factory=list
+    )
+    _file_modifications: list[tuple[str, str]] = dataclasses.field(
+        init=False, default_factory=list
+    )
 
-    def __str__(self) -> str:
+    def for_report(self) -> Iterator[str]:
         if not self._runs:
-            return ""
+            return
         else:
-            return (
-                self._runs.pop(0)
-                + "\n"
-                + "\n".join("" if not run else f" - {run}" for run in self._runs)
-            )
+            for i, run in enumerate(self._runs):
+                yield f":: Run {i+1}"
+                for line in run.for_report():
+                    yield f"   | {line}"
 
-    def __bool__(self) -> bool:
+    @property
+    def has_runs(self) -> bool:
         return bool(self._runs)
+
+    def add_file_modification(self, path: str, action: str) -> None:
+        self._file_modifications.append((path, action))
+
+    def add_run(self) -> protocols.ScenarioRun[protocols.T_Scenario]:
+        """
+        Used to add a single run to the record
+        """
+        raise NotImplementedError()
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -75,22 +136,31 @@ class Scenario:
     Default implementation of the protocols.Scenario
     """
 
-    config: protocols.RunnerConfig
     root_dir: pathlib.Path
-    scenario_hook: protocols.ScenarioHook[Self]
-    runs: protocols.ScenarioRuns = dataclasses.field(init=False, default_factory=ScenarioRuns)
+    same_process: bool
+    typing_strategy: protocols.Strategy
+
+    @classmethod
+    def create(cls, *, config: protocols.RunnerConfig, root_dir: pathlib.Path) -> Self:
+        return cls(
+            same_process=config.same_process,
+            typing_strategy=config.typing_strategy,
+            root_dir=root_dir,
+        )
 
 
 if TYPE_CHECKING:
     C_Scenario = Scenario
     C_RunnerConfig = RunnerConfig
-    C_ScenarioRuns = ScenarioRuns
+    C_ScenarioRun = ScenarioRun[C_Scenario]
+    C_ScenarioRuns = ScenarioRuns[C_Scenario]
     C_ScenarioHook = ScenarioHook[C_Scenario]
 
     _RC: protocols.P_RunnerConfig = cast(C_RunnerConfig, None)
-    _SR: protocols.P_ScenarioRuns = cast(C_ScenarioRuns, None)
 
     _CS: protocols.P_Scenario = cast(C_Scenario, None)
+    _CR: protocols.ScenarioRun[C_Scenario] = cast(C_ScenarioRun, None)
+    _CSR: protocols.ScenarioRuns[C_Scenario] = cast(C_ScenarioRuns, None)
     _CSH: protocols.ScenarioHook[C_Scenario] = cast(C_ScenarioHook, None)
-    _CSM: protocols.ScenarioMaker[C_Scenario] = C_Scenario
+    _CSM: protocols.ScenarioMaker[C_Scenario] = C_Scenario.create
     _CSHM: protocols.ScenarioHookMaker[C_Scenario] = C_ScenarioHook

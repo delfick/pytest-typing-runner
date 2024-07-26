@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import enum
 import pathlib
+from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
 from typing_extensions import Self
@@ -31,6 +32,15 @@ class Strategy(enum.Enum):
     MYPY_DAEMON = "MYPY_DAEMON"
 
 
+class RunOptions(Protocol[T_Scenario]):
+    """
+    Used to represent the options used to run a type checker. This is a mutable object
+    so that the sceneario hooks may modify it before it is used
+    """
+
+    scenario: T_Scenario
+
+
 class RunnerConfig(Protocol):
     """
     An object to represent all the options relevant to this pytest plugin
@@ -55,7 +65,7 @@ class RunnerConfig(Protocol):
         """
 
 
-class ScenarioHook(Protocol[T_CO_Scenario]):
+class ScenarioHook(Protocol[T_Scenario]):
     """
     The protocol for the object that is created for every test that creates a scenario.
 
@@ -67,21 +77,15 @@ class ScenarioHook(Protocol[T_CO_Scenario]):
     """
 
     @property
-    def config(self) -> RunnerConfig:
-        """
-        Plugin level configuration
-        """
-
-    @property
-    def root_dir(self) -> pathlib.Path:
-        """
-        The root path the test takes place in
-        """
-
-    @property
-    def scenario(self) -> T_CO_Scenario:
+    def scenario(self) -> T_Scenario:
         """
         The scenario object under test.
+        """
+
+    @property
+    def runs(self) -> ScenarioRuns[T_Scenario]:
+        """
+        The runs of the type checker for this scenario
         """
 
     def prepare_scenario(self) -> None:
@@ -96,21 +100,94 @@ class ScenarioHook(Protocol[T_CO_Scenario]):
         """
 
 
-class ScenarioRuns(Protocol):
+class ScenarioRun(Protocol[T_Scenario]):
+    """
+    Used to hold information about a single run of a type checker
+    """
+
+    @property
+    def is_first(self) -> bool:
+        """
+        Whether this is the first run for this scenario
+        """
+
+    @property
+    def is_followup(self) -> bool:
+        """
+        Whether this is a followup run
+        """
+
+    @property
+    def scenario(self) -> T_Scenario:
+        """
+        The scenario that was run
+        """
+
+    @property
+    def file_modifications(self) -> Sequence[tuple[str, str]]:
+        """
+        The file modifications that were done before this run
+        """
+
+    @property
+    def options(self) -> RunOptions[T_Scenario]:
+        """
+        The options that were used for the run
+        """
+
+    @property
+    def expectation_error(self) -> Exception | None:
+        """
+        Any error from matching the result to the expectations for that run
+        """
+
+    def for_report(self) -> Iterator[str]:
+        """
+        Used to yield strings returned to present in the pytest report
+        """
+
+
+class ScenarioRuns(Protocol[T_Scenario]):
     """
     Represents information to return in a pytest report at the end of the test
 
     A default implementation is provided by ``pytest_typing_runner.ScenarioRuns``
     """
 
-    def __str__(self) -> str: ...
+    @property
+    def has_runs(self) -> bool:
+        """
+        Whether there were any runs to report
+        """
 
-    def __bool__(self) -> bool: ...
+    @property
+    def scenario(self) -> T_Scenario:
+        """
+        The scenario these runs belong to
+        """
+
+    def for_report(self) -> Iterator[str]:
+        """
+        Used to yield strings to place into the pytest report
+        """
+
+    def add_file_modification(self, path: str, action: str) -> None:
+        """
+        Used to record a file modification for the next run
+        """
+
+    def add_run(self) -> ScenarioRun[T_Scenario]:
+        """
+        Used to add a single run to the record
+        """
 
 
 class Scenario(Protocol):
     """
-    Used to facilitate running and testing a type checker run
+    Used to hold relevant information for running and testing a type checker run.
+
+    This object is overridden to provide a mechanism for stringing custom data throughout
+    all the other objects.
 
     A default implementation is provided by ``pytest_typing_runner.Scenario``
 
@@ -122,26 +199,25 @@ class Scenario(Protocol):
     ``ScenarioMaker`` protocol.
     """
 
-    runs: ScenarioRuns
-    config: RunnerConfig
+    same_process: bool
+    typing_strategy: Strategy
     root_dir: pathlib.Path
-    scenario_hook: ScenarioHook[Self]
+
+    @classmethod
+    def create(cls, *, config: RunnerConfig, root_dir: pathlib.Path) -> Self:
+        """
+        Constructor for the scenario that matches the ScenarioMaker interface
+        """
 
 
-class ScenarioMaker(Protocol[T_Scenario]):
+class ScenarioMaker(Protocol[T_CO_Scenario]):
     """
     Represents an object that creates Scenario objects
 
-    The default implementation of ``Scenario`` already satisfies this protocol.
+    The ``create`` classmethod on a Scenario should implement this.
     """
 
-    def __call__(
-        self,
-        *,
-        config: RunnerConfig,
-        root_dir: pathlib.Path,
-        scenario_hook: ScenarioHook[T_Scenario],
-    ) -> T_Scenario: ...
+    def __call__(self, *, config: RunnerConfig, root_dir: pathlib.Path) -> T_CO_Scenario: ...
 
 
 class ScenarioHookMaker(Protocol[T_Scenario]):
@@ -164,6 +240,9 @@ if TYPE_CHECKING:
     P_Scenario = Scenario
     P_RunnerConfig = RunnerConfig
     P_ScenarioHook = ScenarioHook[P_Scenario]
-    P_ScenarioRuns = ScenarioRuns
+    P_ScenarioRun = ScenarioRun[P_Scenario]
+    P_ScenarioRuns = ScenarioRuns[P_Scenario]
     P_ScenarioMaker = ScenarioMaker[P_Scenario]
     P_ScenarioHookMaker = ScenarioHookMaker[P_Scenario]
+
+    _SM: ScenarioMaker[Scenario] = Scenario.create
