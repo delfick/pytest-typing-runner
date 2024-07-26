@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import enum
 import pathlib
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, MutableSequence, Sequence
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
 from typing_extensions import Self
@@ -39,6 +39,11 @@ class RunOptions(Protocol[T_Scenario]):
     """
 
     scenario: T_Scenario
+    typing_strategy: Strategy
+    cwd: pathlib.Path
+    runner: Runner[T_Scenario]
+    args: MutableSequence[str]
+    do_followup: bool
 
 
 class RunResult(Protocol[T_Scenario]):
@@ -212,6 +217,12 @@ class ScenarioRun(Protocol[T_Scenario]):
         """
 
     @property
+    def expectations(self) -> Expectations[T_Scenario]:
+        """
+        The expectations that were used on this run
+        """
+
+    @property
     def expectation_error(self) -> Exception | None:
         """
         Any error from matching the result to the expectations for that run
@@ -252,9 +263,27 @@ class ScenarioRuns(Protocol[T_Scenario]):
         Used to record a file modification for the next run
         """
 
-    def add_run(self) -> ScenarioRun[T_Scenario]:
+    def add_run(
+        self,
+        *,
+        options: RunOptions[T_Scenario],
+        result: RunResult[T_Scenario],
+        expectations: Expectations[T_Scenario],
+        expectation_error: Exception | None,
+    ) -> ScenarioRun[T_Scenario]:
         """
         Used to add a single run to the record
+        """
+
+
+class Expectations(Protocol[T_Scenario]):
+    """
+    This objects knows how to tell if the output from a type checker matches expectations
+    """
+
+    def validate_result(self, result: RunResult[T_Scenario]) -> None:
+        """
+        Given the result of running a type checker, raise an exception if it doesn't match the expectations of the test
         """
 
 
@@ -315,7 +344,7 @@ class ScenarioRunner(Protocol[T_Scenario]):
         Implementations should forward this to scenario_hook.file_modification
         """
 
-    def run_and_check_static_type_checking(self) -> None:
+    def run_and_check_static_type_checking(self, expectations: Expectations[T_Scenario]) -> None:
         """
         Used to do a run of a type checker and check against the provided expectations
 
@@ -366,12 +395,14 @@ class ScenarioRunnerMaker(Protocol[T_Scenario]):
 if TYPE_CHECKING:
     P_Scenario = Scenario
 
+    P_RunOptions = RunOptions[P_Scenario]
     P_RunResult = RunResult[P_Scenario]
     P_RunnerConfig = RunnerConfig
     P_Runner = Runner[P_Scenario]
     P_ScenarioHook = ScenarioHook[P_Scenario]
     P_ScenarioRun = ScenarioRun[P_Scenario]
     P_ScenarioRuns = ScenarioRuns[P_Scenario]
+    P_Expectations = Expectations[P_Scenario]
     P_ScenarioMaker = ScenarioMaker[P_Scenario]
     P_ScenarioHookMaker = ScenarioHookMaker[P_Scenario]
     P_ScenarioRunnerMaker = ScenarioRunnerMaker[P_Scenario]

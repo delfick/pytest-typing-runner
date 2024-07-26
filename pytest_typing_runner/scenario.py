@@ -79,6 +79,7 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
     scenario: protocols.T_Scenario
     options: protocols.RunOptions[protocols.T_Scenario]
     result: protocols.RunResult[protocols.T_Scenario]
+    expectations: protocols.Expectations[protocols.T_Scenario]
     expectation_error: Exception | None
     file_modifications: Sequence[tuple[str, str]]
 
@@ -128,11 +129,32 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
     def add_file_modification(self, path: str, action: str) -> None:
         self._file_modifications.append((path, action))
 
-    def add_run(self) -> protocols.ScenarioRun[protocols.T_Scenario]:
+    def add_run(
+        self,
+        *,
+        options: protocols.RunOptions[protocols.T_Scenario],
+        result: protocols.RunResult[protocols.T_Scenario],
+        expectations: protocols.Expectations[protocols.T_Scenario],
+        expectation_error: Exception | None,
+    ) -> protocols.ScenarioRun[protocols.T_Scenario]:
         """
         Used to add a single run to the record
         """
-        raise NotImplementedError()
+        file_modifications = tuple(self._file_modifications)
+        self._file_modifications.clear()
+
+        run = ScenarioRun(
+            scenario=self.scenario,
+            is_first=not self.has_runs,
+            is_followup=options.do_followup and len(self._runs) == 1,
+            options=options,
+            result=result,
+            expectations=expectations,
+            expectation_error=expectation_error,
+            file_modifications=file_modifications,
+        )
+        self._runs.append(run)
+        return run
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -162,7 +184,9 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
     def file_modification(self, path: str, content: str | None) -> None:
         raise NotImplementedError()
 
-    def run_and_check_static_type_checking(self) -> None:
+    def run_and_check_static_type_checking(
+        self, expectations: protocols.Expectations[protocols.T_Scenario]
+    ) -> None:
         raise NotImplementedError()
 
 
