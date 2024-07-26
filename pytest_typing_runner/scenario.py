@@ -19,6 +19,12 @@ class RunnerConfig:
     same_process: bool
     typing_strategy: protocols.Strategy
 
+    def __post_init__(self) -> None:
+        if self.typing_strategy is protocols.Strategy.MYPY_DAEMON and self.same_process:
+            raise ValueError(
+                "The DAEMON strategy cannot also be in run in the same pytest process"
+            )
+
 
 class ScenarioHook(Generic[protocols.T_Scenario]):
     """
