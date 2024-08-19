@@ -1,4 +1,5 @@
 from . import file_changer, protocols, runner
+from .builder import ScenarioBuilder, ScenarioFile
 from .expectations import Expectations
 from .scenario import RunnerConfig, Scenario, ScenarioRunner, ScenarioRuns
 
@@ -12,4 +13,5 @@ __all__ = [
     "ScenarioFile",
     "ScenarioRuns",
     "ScenarioRunner",
+    "ScenarioBuilder",
 ]
