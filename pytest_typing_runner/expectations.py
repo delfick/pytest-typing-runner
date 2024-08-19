@@ -1,5 +1,6 @@
 import dataclasses
 import pathlib
+from collections import defaultdict
 from collections.abc import Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Generic, Literal, cast, overload
 
@@ -45,20 +46,34 @@ class ProgramNotice:
     msg: str
 
     def for_compare(self) -> Iterator[Self]:
-        yield self
+        for line in self.msg.split("\n"):
+            yield dataclasses.replace(self, msg=line)
 
     def clone(self, **kwargs: Unpack[protocols.ProgramNoticeCloneKwargs]) -> Self:
         return dataclasses.replace(self, **kwargs)
 
     def display(self) -> str:
-        # TODO Implement
-        return ""
+        col = "" if self.col is None else f" col={self.col}"
+        tag = "" if self.tag is None else f" tag={self.tag} "
+        return f"{col} severity={self.severity} {tag}:: {self.msg}"
 
     def __lt__(self, other: protocols.ProgramNotice) -> bool:
         return self.display() < other.display()
 
     def matches(self, other: protocols.ProgramNotice) -> bool:
-        # TODO: implement
+        same = (
+            self.location == other.location
+            and self.line_number == other.line_number
+            and self.severity == other.severity
+            and self.tag == other.tag
+            and self.msg == other.msg
+        )
+        if not same:
+            return False
+
+        if self.col is not None or other.col is not None:
+            return self.col == other.col
+
         return True
 
 
@@ -77,8 +92,7 @@ class LineNotices:
         yield from self.notices
 
     def add(self, notice: protocols.ProgramNotice) -> Self:
-        # TODO: implement
-        return self
+        return dataclasses.replace(self, notices=[*self.notices, notice])
 
     def replace(
         self,
@@ -87,12 +101,20 @@ class LineNotices:
         replaced: protocols.ProgramNotice,
         first_only: bool = True,
     ) -> Self:
-        # TODO: implement
-        return self
+        replacement: list[protocols.ProgramNotice] = []
+        matched: bool = False
+        for n in self.notices:
+            if chooser(n):
+                if not first_only or not matched:
+                    matched = True
+                    replacement.append(replaced)
+                    continue
+            replacement.append(n)
+
+        return dataclasses.replace(self, notices=replacement)
 
     def remove(self, chooser: protocols.ProgramNoticeChooser) -> Self:
-        # TODO: implement
-        return self
+        return dataclasses.replace(self, notices=[n for n in self.notices if not chooser(n)])
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -116,16 +138,26 @@ class FileNotices:
         return self.by_line_number[line_number]
 
     def set_line_notices(self, line_number: int, notices: protocols.LineNotices) -> Self:
-        # TODO implement
-        return self
+        return dataclasses.replace(
+            self, by_line_number={**self.by_line_number, line_number: notices}
+        )
 
     def add_notice(self, line_number: int, notice: protocols.ProgramNotice) -> Self:
-        # TODO implement
-        return self
+        notices = self._get_or_create_for_line_number(line_number)
+        return dataclasses.replace(
+            self, by_line_number={**self.by_line_number, line_number: notices.add(notice)}
+        )
 
     def set_name(self, name: str, line_number: int) -> Self:
-        # TODO implement
-        return self
+        return dataclasses.replace(
+            self, name_to_line_number={**self.name_to_line_number, name: line_number}
+        )
+
+    def _get_or_create_for_line_number(self, line_number: int) -> protocols.LineNotices:
+        if (existing := self.by_line_number.get(line_number)) is None:
+            return LineNotices(line_number=line_number, location=self.location)
+        else:
+            return existing
 
     @overload
     def find_for_name_or_line(
@@ -144,44 +176,144 @@ class FileNotices:
     def find_for_name_or_line(
         self, *, name_or_line: str | int, severity: str | None = None, must_exist: bool = False
     ) -> tuple[int, protocols.LineNotices, protocols.ProgramNotice | None]:
-        # TODO: implement
-        return 0, LineNotices(line_number=0, location=self.location), None
+        if isinstance(name_or_line, int):
+            line_number = name_or_line
+        else:
+            name = name_or_line
+            if name not in self.name_to_line_number:
+                raise ValueError(f"No named line: {name}")
+
+            line_number = self.name_to_line_number[name]
+
+        notices = self.notices_for_line_number(line_number)
+        if must_exist and notices is None:
+            raise ValueError(f"No existing notices for named line: {name}")
+
+        if notices is None:
+            return line_number, LineNotices(line_number=line_number, location=self.location), None
+
+        found: protocols.ProgramNotice | None = None
+        for notice in reversed(list(notices)):
+            if severity is None:
+                found = notice
+                break
+
+            if notice.severity == severity:
+                found = notice
+                break
+
+        if must_exist and found is None:
+            raise ValueError(
+                f"Found no existing notice for named line/severity: {name}/{severity}"
+            )
+
+        return line_number, notices, found
 
     def add_reveal(self, *, name_or_line: str | int, revealed: str) -> Self:
-        # TODO implement
-        return self
+        line_number, notices, existing = self.find_for_name_or_line(name_or_line=name_or_line)
+        if existing is not None:
+            return self.change_reveal(
+                name_or_line=name_or_line,
+                modify=lambda original: original.clone(
+                    msg=f'{original.msg}\nRevealed type is "{revealed}"'
+                ),
+            )
+
+        return self.set_line_notices(
+            line_number,
+            notices.add(
+                ProgramNotice(
+                    location=self.location,
+                    line_number=line_number,
+                    col=None,
+                    tag=None,
+                    severity="note",
+                    msg=f'Revealed type is "{revealed}"',
+                )
+            ),
+        )
 
     def change_reveal(
         self, *, name_or_line: str | int, modify: protocols.ProgramNoticeModify
     ) -> Self:
-        # TODO implement
-        return self
+        line_number, notices, existing = self.find_for_name_or_line(
+            name_or_line=name_or_line, severity="note", must_exist=True
+        )
+        return self.set_line_notices(
+            line_number,
+            notices.replace(
+                lambda original: original.matches(existing), replaced=modify(existing)
+            ),
+        )
 
     def add_error(self, *, name_or_line: str | int, error_type: str, error: str) -> Self:
-        # TODO implement
-        return self
+        line_number, notices, _ = self.find_for_name_or_line(name_or_line=name_or_line)
+        return self.set_line_notices(
+            line_number,
+            notices.add(
+                ProgramNotice(
+                    location=self.location,
+                    line_number=line_number,
+                    col=None,
+                    tag=error_type,
+                    severity="error",
+                    msg=error,
+                )
+            ),
+        )
 
     def change_error(
         self, *, name_or_line: str | int, modify: protocols.ProgramNoticeModify
     ) -> Self:
-        # TODO implement
-        return self
+        line_number, notices, existing = self.find_for_name_or_line(
+            name_or_line=name_or_line, severity="error", must_exist=True
+        )
+        return self.set_line_notices(
+            line_number,
+            notices.replace(
+                lambda original: original.matches(existing), replaced=modify(existing)
+            ),
+        )
 
     def add_note(self, *, name_or_line: str | int, note: str) -> Self:
-        # TODO implement
-        return self
+        line_number, notices, existing = self.find_for_name_or_line(name_or_line=name_or_line)
+        if existing is not None:
+            return self.change_reveal(
+                name_or_line=name_or_line,
+                modify=lambda original: original.clone(msg=f"{original.msg}\n{note}"),
+            )
+        return self.set_line_notices(
+            line_number,
+            notices.add(
+                ProgramNotice(
+                    location=self.location,
+                    line_number=line_number,
+                    col=None,
+                    tag=None,
+                    severity="note",
+                    msg=note,
+                )
+            ),
+        )
 
     def change_note(
         self, *, name_or_line: str | int, modify: protocols.ProgramNoticeModify
     ) -> Self:
-        # TODO implement
-        return self
+        line_number, notices, existing = self.find_for_name_or_line(
+            name_or_line=name_or_line, severity="note", must_exist=True
+        )
+        return self.set_line_notices(
+            line_number,
+            notices.replace(
+                lambda original: original.matches(existing), replaced=modify(existing)
+            ),
+        )
 
     def remove_notices(
         self, *, name_or_line: str | int, chooser: protocols.ProgramNoticeChooser
     ) -> Self:
-        # TODO implement
-        return self
+        line_number, notices, _ = self.find_for_name_or_line(name_or_line=name_or_line)
+        return self.set_line_notices(line_number, notices.remove(chooser))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -222,8 +354,36 @@ class ProgramNotices:
     def diff(
         self, root_dir: pathlib.Path, other: protocols.ProgramNotices
     ) -> protocols.DiffNotices:
-        # TODO: impelement
-        return DiffNotices(by_file={})
+        by_file_left: dict[str, dict[int, list[protocols.ProgramNotice]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        by_file_right: dict[str, dict[int, list[protocols.ProgramNotice]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+
+        for notices, into in ((self, by_file_left), (other, by_file_right)):
+            for notice in notices:
+                if notice.location.is_relative_to(root_dir):
+                    path = str(notice.location.relative_to(root_dir))
+                else:
+                    path = str(notice.location)
+                into[path][notice.line_number].extend(list(notice.for_compare()))
+
+        final: dict[
+            str, dict[int, tuple[list[protocols.ProgramNotice], list[protocols.ProgramNotice]]]
+        ] = defaultdict(lambda: defaultdict(lambda: ([], [])))
+
+        for index, frm in ((0, by_file_left), (1, by_file_right)):
+            for path, by_line in frm.items():
+                for line_number, ns in by_line.items():
+                    final[path][line_number][index].extend(ns)
+
+        return DiffNotices(
+            by_file={
+                path: DiffFileNotices(by_line_number=by_line_number)
+                for path, by_line_number in final.items()
+            }
+        )
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -235,8 +395,12 @@ class Expectations(Generic[protocols.T_Scenario]):
     expect_notices: ProgramNotices = dataclasses.field(default_factory=ProgramNotices)
 
     def check_results(self, result: protocols.RunResult[protocols.T_Scenario]) -> None:
-        # TODO: implement
-        return
+        self.options.runner.check_notices(result=result, expected_notices=self.expect_notices)
+        assert result.stderr == self.expect_stderr
+        if self.expect_fail or any(notice.severity == "error" for notice in self.expect_notices):
+            assert result.exit_code != 0
+        else:
+            assert result.exit_code == 0
 
     @classmethod
     def success_expectation(
