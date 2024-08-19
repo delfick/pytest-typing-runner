@@ -1,14 +1,15 @@
-from . import protocols
-from .protocols import ScenarioHookMaker, ScenarioMaker
-from .scenario import RunnerConfig, Scenario, ScenarioHook, ScenarioRunner, ScenarioRuns
+from . import file_changer, protocols, runner
+from .expectations import Expectations
+from .scenario import RunnerConfig, Scenario, ScenarioRunner, ScenarioRuns
 
 __all__ = [
+    "runner",
     "protocols",
-    "ScenarioHookMaker",
-    "ScenarioMaker",
+    "file_changer",
+    "Expectations",
     "RunnerConfig",
     "Scenario",
-    "ScenarioHook",
-    "ScenarioRunner",
+    "ScenarioFile",
     "ScenarioRuns",
+    "ScenarioRunner",
 ]
