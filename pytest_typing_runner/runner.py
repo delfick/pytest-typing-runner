@@ -10,9 +10,6 @@ from collections.abc import Iterator, MutableMapping, MutableSequence, Sequence
 from typing import TYPE_CHECKING, Generic, TextIO, cast
 
 import pytest
-from mypy import build
-from mypy.fscache import FileSystemCache
-from mypy.main import process_options
 
 from . import expectations, output, protocols
 
@@ -128,6 +125,10 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
     def _run_inprocess(
         self, options: protocols.RunOptions[protocols.T_Scenario], stdout: TextIO, stderr: TextIO
     ) -> int:
+        from mypy import build
+        from mypy.fscache import FileSystemCache
+        from mypy.main import process_options
+
         fscache = FileSystemCache()
         mypy_sources, mypy_options = process_options(
             list([*options.args, *options.check_paths]), fscache=fscache
