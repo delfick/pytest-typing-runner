@@ -287,11 +287,6 @@ class ProgramNotice(Protocol):
         The message attached to the notice, dedented and including newlines
         """
 
-    def for_compare(self) -> Iterator[Self]:
-        """
-        Return ProgramNotices for comparison
-        """
-
     def clone(self, **kwargs: Unpack[ProgramNoticeCloneKwargs]) -> Self:
         """
         Return a clone with specific changes

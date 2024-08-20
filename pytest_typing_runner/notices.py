@@ -24,10 +24,6 @@ class ProgramNotice:
     tag: str | None
     msg: str
 
-    def for_compare(self) -> Iterator[Self]:
-        for line in self.msg.split("\n"):
-            yield dataclasses.replace(self, msg=line)
-
     def clone(self, **kwargs: Unpack[protocols.ProgramNoticeCloneKwargs]) -> Self:
         return dataclasses.replace(self, **kwargs)
 
@@ -346,7 +342,9 @@ class ProgramNotices:
                     path = str(notice.location.relative_to(root_dir))
                 else:
                     path = str(notice.location)
-                into[path][notice.line_number].extend(list(notice.for_compare()))
+
+                for line in notice.msg.split("\n"):
+                    into[path][notice.line_number].append(notice.clone(msg=line))
 
         final: dict[
             str, dict[int, tuple[list[protocols.ProgramNotice], list[protocols.ProgramNotice]]]
