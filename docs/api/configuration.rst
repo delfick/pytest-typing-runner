@@ -13,17 +13,12 @@ parts of the pytest run.
 
 There are these relevant protocols:
 
-.. autoprotocol:: pytest_typing_runner.protocols.RunnerConfig
+* :protocol:`pytest_typing_runner.protocols.RunnerConfig`
+* :protocol:`pytest_typing_runner.protocols.ScenarioRuns`
+* :protocol:`pytest_typing_runner.protocols.Scenario`
+* :protocol:`pytest_typing_runner.protocols.ScenarioMaker`
 
-.. autoprotocol:: pytest_typing_runner.protocols.ScenarioRuns
-
-.. autoprotocol:: pytest_typing_runner.protocols.Scenario
-
-With two additional protocols to represent objects for creation:
-
-.. autoprotocol:: pytest_typing_runner.protocols.ScenarioMaker
-
-There are four pytest fixtures that can be overridden within any pytest scope
+There are three pytest fixtures that can be overridden within any pytest scope
 to change what concrete implementations get used:
 
 .. code-block:: python
