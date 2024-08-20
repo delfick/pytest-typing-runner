@@ -52,6 +52,13 @@ class RunOptions(Protocol[T_Scenario]):
 class FileModifier(Protocol):
     """
     Represents a function that can change a file in the scenario
+
+    Implementations should aim to consider the signature as follows:
+
+    :param path: A string representing the path from the root dir to a file
+    :param content:
+        Passed in as ``None`` if the file is to be deleted, otherwise the content
+        to override the file with
     """
 
     def __call__(self, *, path: str, content: str | None) -> None: ...
