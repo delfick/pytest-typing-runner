@@ -1,7 +1,7 @@
 import pathlib
 import textwrap
 
-from pytest_typing_runner import expectations, notices
+from pytest_typing_runner import interpret, notices
 
 
 class TestParseNotices:
@@ -58,14 +58,14 @@ class TestParseNotices:
             # ^ REVEAL[five] ^ Union[type[simple.models.Follow1], type[simple.models.Follow2]]
         """)
 
-        expected = expectations.FileNotices(
+        expected = notices.FileNotices(
             location=location,
             by_line_number={
-                3: expectations.LineNotices(
+                3: notices.LineNotices(
                     line_number=3,
                     location=location,
                     notices=[
-                        expectations.ProgramNotice(
+                        notices.ProgramNotice(
                             location=location,
                             line_number=3,
                             col=None,
@@ -75,11 +75,11 @@ class TestParseNotices:
                         )
                     ],
                 ),
-                11: expectations.LineNotices(
+                11: notices.LineNotices(
                     line_number=11,
                     location=location,
                     notices=[
-                        expectations.ProgramNotice(
+                        notices.ProgramNotice(
                             location=location,
                             line_number=11,
                             col=None,
@@ -89,11 +89,11 @@ class TestParseNotices:
                         )
                     ],
                 ),
-                14: expectations.LineNotices(
+                14: notices.LineNotices(
                     line_number=14,
                     location=location,
                     notices=[
-                        expectations.ProgramNotice(
+                        notices.ProgramNotice(
                             location=location,
                             line_number=14,
                             col=None,
@@ -103,11 +103,11 @@ class TestParseNotices:
                         )
                     ],
                 ),
-                18: expectations.LineNotices(
+                18: notices.LineNotices(
                     line_number=18,
                     location=location,
                     notices=[
-                        expectations.ProgramNotice(
+                        notices.ProgramNotice(
                             location=location,
                             line_number=18,
                             col=None,
@@ -117,11 +117,11 @@ class TestParseNotices:
                         )
                     ],
                 ),
-                23: expectations.LineNotices(
+                23: notices.LineNotices(
                     line_number=23,
                     location=location,
                     notices=[
-                        expectations.ProgramNotice(
+                        notices.ProgramNotice(
                             location=location,
                             line_number=23,
                             col=None,
@@ -135,11 +135,11 @@ class TestParseNotices:
             name_to_line_number={"one": 3, "two": 11, "three": 14, "four": 18, "five": 23},
         )
 
-        parsed = notices.parse_notices_from_file(expectations.FileNotices(location=location))
+        parsed = interpret.parse_notices_from_file(notices.FileNotices(location=location))
         assert location.read_text() == transformed
         assert parsed == expected
 
         # And can run again with no further changes
-        parsed = notices.parse_notices_from_file(expectations.FileNotices(location=location))
+        parsed = interpret.parse_notices_from_file(notices.FileNotices(location=location))
         assert location.read_text() == transformed
         assert parsed == expected

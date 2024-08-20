@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Generic, TextIO, cast
 
 import pytest
 
-from . import expectations, output, protocols
+from . import expectations, interpret, protocols
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -74,9 +74,9 @@ class ExternalMypyRunner(Generic[protocols.T_Scenario]):
         if lines[-1].startswith("Success: no issues"):
             lines.pop()
 
-        notices = output.interpret_mypy_output(result.options.scenario, result.options, lines)
-        output.compare_notices(
-            notices.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
+        got = interpret.interpret_mypy_output(result.options.scenario, result.options, lines)
+        expectations.compare_notices(
+            got.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
         )
 
     def short_display(self) -> str:
@@ -194,9 +194,9 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
         if lines[-1].startswith("Success: no issues"):
             lines.pop()
 
-        notices = output.interpret_mypy_output(result.options.scenario, result.options, lines)
-        output.compare_notices(
-            notices.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
+        got = interpret.interpret_mypy_output(result.options.scenario, result.options, lines)
+        expectations.compare_notices(
+            got.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
         )
 
     def short_display(self) -> str:
@@ -247,9 +247,9 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
         if lines and lines[0] == "Daemon started":
             lines.pop(0)
 
-        notices = output.interpret_mypy_output(result.options.scenario, result.options, lines)
-        output.compare_notices(
-            notices.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
+        got = interpret.interpret_mypy_output(result.options.scenario, result.options, lines)
+        expectations.compare_notices(
+            got.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
         )
         self.check_daemon_restarted(result, restarted=daemon_restarted)
 

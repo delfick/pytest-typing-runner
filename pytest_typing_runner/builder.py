@@ -2,11 +2,11 @@ import dataclasses
 import functools
 import pathlib
 from collections.abc import Callable, MutableMapping
-from typing import TYPE_CHECKING, Generic, TypedDict, cast
+from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self, TypeVar
 
-from . import expectations, file_changer, protocols
+from . import expectations, file_changer, notices, protocols
 
 T_CO_ScenarioFile = TypeVar(
     "T_CO_ScenarioFile", bound="ScenarioFile", default="ScenarioFile", covariant=True
@@ -115,7 +115,7 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
             options=options,
             expect_fail=scenario_runner.scenario.expect_fail,
             expect_stderr="",
-            expect_notices=expectations.ProgramNotices(
+            expect_notices=notices.ProgramNotices(
                 notices={
                     scenario_runner.scenario.root_dir / path: known.notices()
                     for path, known in self._known_files.items()
@@ -135,8 +135,8 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
 if TYPE_CHECKING:
     _SC: protocols.P_ScenarioFile = cast(ScenarioFile, None)
 
-    class _Extra(TypedDict):
-        file_parser: protocols.FileNoticesParser
-        file_modification: protocols.FileModifier
-
-    _SCM: protocols.P_ScenarioFileMaker = functools.partial(ScenarioFile, **(cast(_Extra, None)))
+    _SCM: protocols.P_ScenarioFileMaker = functools.partial(
+        ScenarioFile,
+        file_parser=cast(protocols.FileNoticesParser, None),
+        file_modification=cast(protocols.FileModifier, None),
+    )

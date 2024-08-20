@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self, assert_never
 
-from . import expectations, notices, protocols, runner
+from . import interpret, notices, protocols, runner
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -161,7 +161,7 @@ class Scenario:
         expectations.check_results(result=result)
 
     def parse_notices_from_file(self, location: pathlib.Path) -> protocols.FileNotices:
-        return notices.parse_notices_from_file(expectations.FileNotices(location=location))
+        return interpret.parse_notices_from_file(notices.FileNotices(location=location))
 
 
 class ScenarioRunner(Generic[protocols.T_Scenario]):
