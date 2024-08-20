@@ -193,9 +193,9 @@ class TestCopyDirectory:
         }
 
 
-class TestPythonFileChanger:
+class TestBasicPythonAssignmentChanger:
     def test_it_complains_if_location_is_outside_root_dir(self, tmp_path: pathlib.Path) -> None:
-        changer = file_changer.PythonFileChanger(
+        changer = file_changer.BasicPythonAssignmentChanger(
             root_dir=tmp_path, path="../../somewhere", variable_changers={}
         )
 
@@ -220,7 +220,7 @@ class TestPythonFileChanger:
             called.append((variable_name, values[variable_name]))
             return node
 
-        changer = file_changer.PythonFileChanger(
+        changer = file_changer.BasicPythonAssignmentChanger(
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={"ONE": looker, "TWO": looker, "THREE": looker},
@@ -263,7 +263,7 @@ class TestPythonFileChanger:
                     case _:
                         assert_never(node)
 
-        changer = file_changer.PythonFileChanger(
+        changer = file_changer.BasicPythonAssignmentChanger(
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={
@@ -299,7 +299,7 @@ class TestVariableFinder:
         def notifier(*, variable_name: str, value: object) -> None:
             called.append((variable_name, value))
 
-        changer = file_changer.PythonFileChanger(
+        changer = file_changer.BasicPythonAssignmentChanger(
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={
@@ -339,7 +339,7 @@ class TestListVariableChanger:
                 called.append((variable_name, values))
                 return [ast.Constant(i) for i in self.new_values]
 
-        changer = file_changer.PythonFileChanger(
+        changer = file_changer.BasicPythonAssignmentChanger(
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={
