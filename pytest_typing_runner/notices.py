@@ -252,7 +252,7 @@ class FileNotices:
         """
         Return True if there are there any notices for this file
         """
-        return any(notices for notices in self.by_line_number.values())
+        return any(notices for notices in self.by_line_number.values() if notices.has_notices)
 
     def __iter__(self) -> Iterator[protocols.ProgramNotice]:
         """
@@ -373,19 +373,44 @@ class DiffNotices:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ProgramNotices:
+    """
+    Represents all the notices for a run of a static type checker
+
+    Implements :protocol:`pytest_typing_runner.protocols.ProgramNotices`
+    """
+
     notices: Mapping[pathlib.Path, protocols.FileNotices] = dataclasses.field(default_factory=dict)
 
     @property
     def has_notices(self) -> bool:
-        return any(notices for notices in self.notices.values())
+        """
+        Return whether there are any notices
+        """
+        return any(notices for notices in self.notices.values() if notices.has_notices)
 
     def __iter__(self) -> Iterator[protocols.ProgramNotice]:
+        """
+        Yield all program notices
+        """
         for _, notices in sorted(self.notices.items()):
             yield from notices
 
     def diff(
         self, root_dir: pathlib.Path, other: protocols.ProgramNotices
     ) -> protocols.DiffNotices:
+        """
+        Produce a diff where this program notices is on the left, and the notices
+        passed in is on the right.
+
+        All locations across both will appear in the diff as strings relative to
+        the passed in ``root_dir``.
+
+        :param root_dir:
+            All locations will be represented as a string relative to the ``root_dir``
+            except for paths outside of ``root_dir`` which will be a string of
+            the full path
+        :param other: The right side of the diff
+        """
         by_file_left: dict[str, dict[int, list[protocols.ProgramNotice]]] = defaultdict(
             lambda: defaultdict(list)
         )
@@ -419,12 +444,40 @@ class ProgramNotices:
         )
 
     def notices_at_location(self, location: pathlib.Path) -> protocols.FileNotices | None:
+        """
+        Return the FileNotices for the specified ``location`` or ``None`` if
+        no existing notices for that location.
+
+        Note if there is an empty FileNotices for that location it will be
+        returned instead of ``None``
+
+        :param location: The location to return notices for
+        """
         return self.notices.get(location)
 
     def generate_notices_for_location(self, location: pathlib.Path) -> protocols.FileNotices:
+        """
+        Return an object that satisfies :protocol:`pytest_typing_runner.protocols.FileNotices`
+
+        Note the file notices are not added to this ProgramNotices.
+
+        :param location: The value set on the FileNotices for ``location``
+        """
         return FileNotices(location=location)
 
     def set_files(self, notices: Mapping[pathlib.Path, protocols.FileNotices | None]) -> Self:
+        """
+        Return a copy of this ProgramNotices overriding the notices with those passed in
+
+        Note that ``None`` values will result in that location being removed.
+
+        Locations that exist but aren't in the passed in notices will be
+        preserved
+
+        :param notices:
+            A map of location to either FileNotices to set for that location or
+            ``None`` when that location should be removed.
+        """
         replacement = dict(self.notices)
         for location, file_notices in notices.items():
             if file_notices is None:

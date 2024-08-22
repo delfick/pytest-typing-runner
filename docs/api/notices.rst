@@ -40,3 +40,7 @@ These are the default implementations of the different layers of the notices:
 .. autoclass:: pytest_typing_runner.notices.FileNotices(location: ~pathlib.Path)
    :members:
    :member-order: bysource
+
+.. autoclass:: pytest_typing_runner.notices.ProgramNotices()
+   :members:
+   :member-order: bysource

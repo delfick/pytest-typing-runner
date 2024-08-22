@@ -485,7 +485,7 @@ class FileNoticesParser(Protocol):
 
 class ProgramNotices(Protocol):
     """
-    Represents the information returned by the static type check
+    Represents the information returned by the static type checker
     """
 
     @property
@@ -512,15 +512,13 @@ class ProgramNotices(Protocol):
     def set_files(self, notices: Mapping[pathlib.Path, FileNotices | None]) -> Self:
         """
         Return a copy with these notices for the specified files
-
-        Always return a ProgramNotices even if there are no remaining files
         """
 
     def generate_notices_for_location(self, location: pathlib.Path) -> FileNotices:
         """
         Return a file notices for this location
 
-        Note this does not add the notices to this ProgramNotices
+        Implementations should not modify this ProgramNotices
         """
 
 
