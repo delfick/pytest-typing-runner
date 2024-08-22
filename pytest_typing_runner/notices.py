@@ -154,6 +154,15 @@ class ProgramNotice:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class LineNotices:
+    """
+    Default implementation for :protocol:`pytest_typing_runner.protocols.LineNotices`
+
+    This represents the notices at a specific line in a specific file
+
+    :param location: The path these notices are for
+    :param line_number: The specific line number for these notices
+    """
+
     location: pathlib.Path
     line_number: int
 
@@ -161,13 +170,16 @@ class LineNotices:
 
     @property
     def has_notices(self) -> bool:
+        """
+        Return whether this contains any notices
+        """
         return bool(self.notices)
 
     def __iter__(self) -> Iterator[protocols.ProgramNotice]:
+        """
+        Yield all the notices for this line
+        """
         yield from self.notices
-
-    def add(self, notice: protocols.ProgramNotice) -> Self:
-        return dataclasses.replace(self, notices=[*self.notices, notice])
 
     @overload
     def set_notices(
@@ -184,6 +196,12 @@ class LineNotices:
     def set_notices(
         self, notices: Sequence[protocols.ProgramNotice | None], allow_empty: bool = False
     ) -> Self | None:
+        """
+        Return a copy where the chosen notice(s) are replaced
+
+        :param notices: The notices the clone should have. Any None entries are dropped
+        :param allow_empty: If False then None is returned instead of a copy with an empty list
+        """
         replacement = [n for n in notices if n is not None]
         if not replacement:
             if not allow_empty:
@@ -193,6 +211,13 @@ class LineNotices:
     def generate_notice(
         self, *, severity: protocols.Severity | None = None, msg: str = "", col: int | None = None
     ) -> protocols.ProgramNotice:
+        """
+        Return an object that satisfies :protocol:`pytest_typing_runner.protocols.ProgramNotice`
+
+        :param severity: optional severity, defaults to "note"
+        :param msg: optional msg, defaults to an empty string
+        :param col: optional column, defaults to ``None``
+        """
         if severity is None:
             severity = NoteSeverity()
         return ProgramNotice(

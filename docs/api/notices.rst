@@ -27,8 +27,12 @@ object with two default implementations:
 
 .. autoclass:: pytest_typing_runner.notices.ErrorSeverity
 
-The default implementations for :protocol:`pytest_typing_runner.protocols.ProgramNotice` is:
+These are the default implementations of the different layers of the notices:
 
 .. autoclass:: pytest_typing_runner.notices.ProgramNotice
+   :members:
+   :member-order: bysource
+
+.. autoclass:: pytest_typing_runner.notices.LineNotices(*, location: ~pathlib.Path, line_number: int)
    :members:
    :member-order: bysource

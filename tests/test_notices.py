@@ -226,3 +226,98 @@ class TestProgramNotice:
                 msg="zebra",
             )
         )
+
+
+class TestLineNotices:
+    def test_it_has_properties(self, tmp_path: pathlib.Path) -> None:
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2)
+        assert line_notices.location == tmp_path
+        assert line_notices.line_number == 2
+
+        assert not line_notices.has_notices
+        assert list(line_notices) == []
+
+    def test_it_knows_if_it_can_have_notices(self, tmp_path: pathlib.Path) -> None:
+        line_notices: protocols.LineNotices | None = notices.LineNotices(
+            location=tmp_path, line_number=2
+        )
+        assert line_notices is not None
+        assert not line_notices.has_notices
+        n1 = line_notices.generate_notice()
+        n2 = line_notices.generate_notice()
+        assert not line_notices.has_notices
+
+        copy = line_notices.set_notices([n1, n2])
+        assert copy is not None
+        assert not line_notices.has_notices
+        assert list(line_notices) == []
+
+        assert copy.has_notices
+        assert list(copy) == [n1, n2]
+
+    def test_it_can_ignore_adding_None_notices(self, tmp_path: pathlib.Path) -> None:
+        line_notices: protocols.LineNotices | None = notices.LineNotices(
+            location=tmp_path, line_number=2
+        )
+        assert line_notices is not None
+        assert not line_notices.has_notices
+        n1 = line_notices.generate_notice()
+        n2 = line_notices.generate_notice()
+        assert not line_notices.has_notices
+
+        line_notices = line_notices.set_notices([n1, n2])
+        assert line_notices is not None
+        assert line_notices.has_notices
+        assert list(line_notices) == [n1, n2]
+
+        line_notices = line_notices.set_notices([n1, None])
+        assert line_notices is not None
+        assert line_notices.has_notices
+        assert list(line_notices) == [n1]
+
+    def test_it_can_become_empty(self, tmp_path: pathlib.Path) -> None:
+        line_notices: protocols.LineNotices | None = notices.LineNotices(
+            location=tmp_path, line_number=2
+        )
+        assert line_notices is not None
+        assert not line_notices.has_notices
+        n1 = line_notices.generate_notice()
+        n2 = line_notices.generate_notice()
+        assert not line_notices.has_notices
+
+        line_notices = line_notices.set_notices([n1, n2])
+        assert line_notices is not None
+        assert line_notices.has_notices
+        assert list(line_notices) == [n1, n2]
+
+        deleted = line_notices.set_notices([None, None])
+        assert deleted is None
+
+        emptied = line_notices.set_notices([None, None], allow_empty=True)
+        assert emptied is not None
+        assert not emptied.has_notices
+        assert list(emptied) == []
+
+    def test_it_can_generate_a_program_notice(self, tmp_path: pathlib.Path) -> None:
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2)
+
+        n1 = line_notices.generate_notice()
+        assert n1.location == tmp_path
+        assert n1.line_number == 2
+        assert n1.severity == notices.NoteSeverity()
+        assert n1.msg == ""
+        assert n1.col is None
+
+        n2 = line_notices.generate_notice(severity=notices.ErrorSeverity(error_type="arg-type"))
+        assert n2.location == tmp_path
+        assert n2.line_number == 2
+        assert n2.severity == notices.ErrorSeverity(error_type="arg-type")
+        assert n2.msg == ""
+        assert n2.col is None
+
+        n3 = line_notices.generate_notice(msg="other")
+        assert n3.location == tmp_path
+        assert n3.line_number == 2
+        assert n3.severity == notices.NoteSeverity()
+        assert n3.msg == "other"
+        assert n3.col is None

@@ -401,7 +401,8 @@ class LineNotices(Protocol):
         """
         Return a copy where the chosen notice(s) are replaced
 
-        If there are no notices then return None to indicate a deleted line
+        :param notices: The notices the clone should have. Any None entries are dropped
+        :param allow_empty: If False then None is returned instead of a copy with an empty list
         """
 
     def generate_notice(
