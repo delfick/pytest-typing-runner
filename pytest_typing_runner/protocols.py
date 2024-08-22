@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import enum
 import pathlib
-from collections.abc import Iterator, MutableMapping, MutableSequence, Sequence
+from collections.abc import Iterator, Mapping, MutableMapping, MutableSequence, Sequence
 from typing import TYPE_CHECKING, Literal, Protocol, TypedDict, TypeVar, cast, overload
 
 from typing_extensions import NotRequired, Self, Unpack
 
 T_Scenario = TypeVar("T_Scenario", bound="Scenario")
+T_NoticesLayer = TypeVar("T_NoticesLayer", "FileNotices", "LineNotices", "ProgramNotice")
 T_CO_Scenario = TypeVar("T_CO_Scenario", bound="Scenario", covariant=True)
 T_CO_ScenarioFile = TypeVar("T_CO_ScenarioFile", bound="P_ScenarioFile", covariant=True)
 
@@ -245,11 +246,36 @@ class ScenarioRuns(Protocol[T_Scenario]):
         """
 
 
+class Severity(Protocol):
+    @property
+    def display(self) -> str:
+        """
+        Return the severity as a string
+        """
+
+    def __eq__(self, other: object) -> bool:
+        """
+        For comparison
+        """
+
+    def __lt__(self, other: Severity) -> bool:
+        """
+        For ordering severities
+        """
+
+
+class ProgramNoticesChanger(Protocol):
+    def __call__(self, notices: ProgramNotices, /) -> ProgramNotices: ...
+
+
+class ProgramNoticeChanger(Protocol[T_NoticesLayer]):
+    def __call__(self, notices: T_NoticesLayer, /) -> T_NoticesLayer | None: ...
+
+
 class ProgramNoticeCloneKwargs(TypedDict):
     line_number: NotRequired[int]
     col: NotRequired[int | None]
-    severity: NotRequired[str]
-    tag: NotRequired[str | None]
+    severity: NotRequired[Severity]
     msg: NotRequired[str]
 
 
@@ -277,15 +303,9 @@ class ProgramNotice(Protocol):
         """
 
     @property
-    def severity(self) -> str:
+    def severity(self) -> Severity:
         """
         The severity of the notice
-        """
-
-    @property
-    def tag(self) -> str | None:
-        """
-        The tag associated with the notice if there was one
         """
 
     @property
@@ -313,22 +333,6 @@ class ProgramNotice(Protocol):
         """
         Return a string form for display
         """
-
-
-class ProgramNoticeModify(Protocol):
-    """
-    Used to modify a program notice
-    """
-
-    def __call__(self, notice: ProgramNotice) -> ProgramNotice: ...
-
-
-class ProgramNoticeChooser(Protocol):
-    """
-    Used to choose program notices
-    """
-
-    def __call__(self, notice: ProgramNotice) -> bool: ...
 
 
 class DiffFileNotices(Protocol):
@@ -377,23 +381,32 @@ class LineNotices(Protocol):
         Yield all the notices
         """
 
-    def add(self, notice: ProgramNotice) -> Self:
-        """
-        Return a line notices with the added notice
-        """
+    @overload
+    def set_notices(
+        self, notices: Sequence[ProgramNotice | None], *, allow_empty: Literal[True]
+    ) -> Self: ...
 
-    def replace(
-        self, chooser: ProgramNoticeChooser, *, replaced: ProgramNotice, first_only: bool = True
-    ) -> Self:
+    @overload
+    def set_notices(
+        self, notices: Sequence[ProgramNotice | None], *, allow_empty: Literal[False] = False
+    ) -> Self | None: ...
+
+    def set_notices(
+        self, notices: Sequence[ProgramNotice | None], *, allow_empty: bool = False
+    ) -> Self | None:
         """
         Return a copy where the chosen notice(s) are replaced
 
-        Only replace first notice that is found if first_only is True
+        If there are no notices then return None to indicate a deleted line
         """
 
-    def remove(self, chooser: ProgramNoticeChooser) -> Self:
+    def generate_notice(
+        self, *, severity: Severity | None = None, msg: str = "", col: int | None = None
+    ) -> ProgramNotice:
         """
-        Return a copy where chosen notices aren't included
+        Generate a notice for this location and line
+
+        This does not add the notice to this LineNotices
         """
 
 
@@ -419,29 +432,22 @@ class FileNotices(Protocol):
         Yield all the notices
         """
 
-    def notices_for_line_number(self, line_number: int) -> LineNotices | None:
+    def get_line_number(self, name_or_line: str | int, /) -> int | None:
+        """
+        Given a name or line number, return a line number or None if that line number
+        doesn't have any notices
+        """
+
+    def notices_at_line(self, line_number: int) -> LineNotices | None:
         """
         Return the line notices for a specific line number if there are any
         """
 
-    @overload
-    def find_for_name_or_line(
-        self, *, name_or_line: str | int, severity: str | None = None, must_exist: Literal[True]
-    ) -> tuple[int, LineNotices, ProgramNotice]: ...
-
-    @overload
-    def find_for_name_or_line(
-        self,
-        *,
-        name_or_line: str | int,
-        severity: str | None = None,
-        must_exist: Literal[False] = False,
-    ) -> tuple[int, LineNotices, ProgramNotice | None]: ...
-    def find_for_name_or_line(
-        self, *, name_or_line: str | int, severity: str | None = None, must_exist: bool = False
-    ) -> tuple[int, LineNotices, ProgramNotice | None]:
+    def generate_notices_for_line(self, line_number: int) -> LineNotices:
         """
-        Return the line_number, notices at that line, and the matched notice
+        Return a line notices for this location at the specified line
+
+        Note this does not add the notices to this FileNotices
         """
 
     def set_name(self, name: str, line_number: int) -> Self:
@@ -449,58 +455,24 @@ class FileNotices(Protocol):
         Associate a name with a specific line number
         """
 
-    def set_line_notices(self, line_number: int, notices: LineNotices) -> Self:
-        """
-        Return a modified notices with these notices for the specified line number
-        """
+    @overload
+    def set_lines(
+        self, notices: Mapping[int, LineNotices | None], *, allow_empty: Literal[True]
+    ) -> Self: ...
 
-    def add_notice(self, line_number: int, notice: ProgramNotice) -> Self:
-        """
-        Return a modified notices with this additional notice
-        """
+    @overload
+    def set_lines(
+        self, notices: Mapping[int, LineNotices | None], *, allow_empty: Literal[False] = False
+    ) -> Self | None: ...
 
-    def add_reveal(self, *, name_or_line: str | int, revealed: str) -> Self:
+    def set_lines(
+        self, notices: Mapping[int, LineNotices | None], *, allow_empty: bool = False
+    ) -> Self | None:
         """
-        Return a modified notices with this additional reveal note
-        """
+        Return a modified notices with these notices for the specified line numbers
 
-    def change_reveal(self, *, name_or_line: str | int, modify: ProgramNoticeModify) -> Self:
+        If there are no notices remaining then return None to indicate a deleted file
         """
-        Return a modified notices with a changed reveal notice at this named line
-        """
-
-    def add_error(self, *, name_or_line: str | int, error_type: str, error: str) -> Self:
-        """
-        Return a modified notices with this additional error notice
-        """
-
-    def change_error(self, *, name_or_line: str | int, modify: ProgramNoticeModify) -> Self:
-        """
-        Return a modified notices with a changed error notice at this named line
-        """
-
-    def add_note(self, *, name_or_line: str | int, note: str) -> Self:
-        """
-        Return a modified notices with this additional note
-        """
-
-    def change_note(self, *, name_or_line: str | int, modify: ProgramNoticeModify) -> Self:
-        """
-        Return a modified notices with a changed note at this named line
-        """
-
-    def remove_notices(self, *, name_or_line: str | int, chooser: ProgramNoticeChooser) -> Self:
-        """
-        Return a copy where the chosen notices at specified line are removed
-        """
-
-
-class FileNoticesChanger(Protocol):
-    """
-    Used to make some changes to the FileNotices
-    """
-
-    def __call__(self, notices: FileNotices) -> FileNotices: ...
 
 
 class FileNoticesParser(Protocol):
@@ -530,6 +502,25 @@ class ProgramNotices(Protocol):
     def diff(self, root_dir: pathlib.Path, other: ProgramNotices) -> DiffNotices:
         """
         Return an object representing what is the same and what is different between two program notices
+        """
+
+    def notices_at_location(self, location: pathlib.Path) -> FileNotices | None:
+        """
+        Return the notices for this location if any
+        """
+
+    def set_files(self, notices: Mapping[pathlib.Path, FileNotices | None]) -> Self:
+        """
+        Return a copy with these notices for the specified files
+
+        Always return a ProgramNotices even if there are no remaining files
+        """
+
+    def generate_notices_for_location(self, location: pathlib.Path) -> FileNotices:
+        """
+        Return a file notices for this location
+
+        Note this does not add the notices to this ProgramNotices
         """
 
 
@@ -689,7 +680,7 @@ class ScenarioFile(Protocol):
         The path to this file relative to the rootdir
         """
 
-    def notices(self) -> FileNotices:
+    def notices(self) -> FileNotices | None:
         """
         Return the notices associated with this file
         """
@@ -716,12 +707,14 @@ if TYPE_CHECKING:
     P_ExpectationsMaker = ExpectationsMaker[P_Scenario]
     P_ScenarioRunnerMaker = ScenarioRunnerMaker[P_Scenario]
 
+    P_Severity = Severity
     P_FileNotices = FileNotices
     P_LineNotices = LineNotices
     P_ProgramNotice = ProgramNotice
     P_ProgramNotices = ProgramNotices
-    P_FileNoticesChanger = FileNoticesChanger
     P_FileNoticesParser = FileNoticesParser
+    P_ProgramNoticeChanger = ProgramNoticeChanger
+    P_ProgramNoticesChanger = ProgramNoticesChanger
     P_DiffNotices = DiffNotices
     P_DiffFileNotices = DiffFileNotices
 

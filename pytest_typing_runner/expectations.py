@@ -43,7 +43,10 @@ class Expectations(Generic[protocols.T_Scenario]):
     def check_results(self, result: protocols.RunResult[protocols.T_Scenario]) -> None:
         self.options.runner.check_notices(result=result, expected_notices=self.expect_notices)
         assert result.stderr == self.expect_stderr
-        if self.expect_fail or any(notice.severity == "error" for notice in self.expect_notices):
+        if self.expect_fail or any(
+            notice.severity == notices.ErrorSeverity(error_type="")
+            for notice in self.expect_notices
+        ):
             assert result.exit_code != 0
         else:
             assert result.exit_code == 0

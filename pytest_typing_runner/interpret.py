@@ -1,14 +1,13 @@
 import dataclasses
 import enum
 import importlib
-import pathlib
 import re
 import textwrap
 from collections.abc import Sequence
 
 from typing_extensions import assert_never
 
-from . import notices, protocols
+from . import notice_changers, notices, protocols
 
 regexes = {
     "mypy_output_line": re.compile(
@@ -43,7 +42,7 @@ class _MypyOutputLineMatch:
     col: int | None
     severity: str
     msg: str
-    tag: str | None
+    tag: str
 
 
 class _Instruction(enum.Enum):
@@ -53,10 +52,10 @@ class _Instruction(enum.Enum):
     NOTE = "NOTE"
 
 
-def parse_notices_from_file(notices: protocols.FileNotices) -> protocols.FileNotices:
-    location = notices.location
+def parse_notices_from_file(file_notices: protocols.FileNotices, /) -> protocols.FileNotices:
+    location = file_notices.location
     if not location.exists() or not (content := textwrap.dedent(location.read_text())):
-        return notices
+        return file_notices
 
     line_number = 0
     result: list[str] = [""]
@@ -89,13 +88,14 @@ def parse_notices_from_file(notices: protocols.FileNotices) -> protocols.FileNot
             )
 
         if name:
-            notices = notices.set_name(name, previous_code_line_number)
+            file_notices = file_notices.set_name(name, previous_code_line_number)
 
-        for_previous = notices.notices_for_line_number(previous_code_line_number)
-
-        previous: protocols.ProgramNotice | None = None
-        if for_previous and for_previous.has_notices:
-            previous = list(for_previous)[-1]
+        def modify_line(
+            line: int, /, *, change: protocols.ProgramNoticeChanger[protocols.LineNotices]
+        ) -> protocols.FileNotices:
+            return notice_changers.ModifyLine(
+                name_or_line=line, line_must_exist=False, change=change
+            )(file_notices, allow_empty=True)
 
         if instruction is _Instruction.REVEAL:
             previous_line = result[previous_code_line_number].strip()
@@ -109,39 +109,56 @@ def parse_notices_from_file(notices: protocols.FileNotices) -> protocols.FileNot
                     line_number += 1
                     previous_code_line_number += 1
                     if name:
-                        notices = notices.set_name(name, previous_code_line_number)
+                        file_notices = file_notices.set_name(name, previous_code_line_number)
                 else:
                     result[previous_code_line_number] = (
                         f"{prefix_whitespace}reveal_type({previous_line})"
                     )
 
-            notices = notices.add_reveal(name_or_line=previous_code_line_number, revealed=rest)
+            file_notices = modify_line(
+                previous_code_line_number,
+                change=notice_changers.AppendToLine(
+                    notices_maker=lambda line_notices: [
+                        line_notices.generate_notice(
+                            severity=notices.NoteSeverity(),
+                            msg=notices.ProgramNotice.reveal_msg(rest),
+                        )
+                    ]
+                ),
+            )
         elif instruction is _Instruction.ERROR:
             assert error_type, "Must use `# ^ ERROR(error-type) ^ error here`"
-            notices = notices.add_error(
-                name_or_line=previous_code_line_number, error_type=error_type, error=rest
+            file_notices = modify_line(
+                previous_code_line_number,
+                change=notice_changers.AppendToLine(
+                    notices_maker=lambda line_notices: [
+                        line_notices.generate_notice(
+                            severity=notices.ErrorSeverity(error_type=error_type), msg=rest
+                        )
+                    ]
+                ),
             )
         elif instruction is _Instruction.NOTE:
-            if previous and previous.severity == "note":
-                assert for_previous is not None
-                clone = previous.clone(msg=f"{previous.msg}\n{rest}")
-                notices = notices.set_line_notices(
-                    previous_code_line_number,
-                    for_previous.replace(
-                        lambda original: original.matches(previous),
-                        replaced=clone,
+            file_notices = modify_line(
+                previous_code_line_number,
+                change=notice_changers.ModifyLatestMatch(
+                    must_exist=False,
+                    matcher=lambda notice: (
+                        notice.severity == notices.NoteSeverity()
+                        and not notice.msg.startswith("Revealed type is")
                     ),
-                )
-                previous = clone
-            else:
-                notices = notices.add_note(name_or_line=previous_code_line_number, note=rest)
+                    change=lambda notice: notice.clone(
+                        severity=notices.NoteSeverity(), msg=f"{notice.msg}\n{rest}"
+                    ),
+                ),
+            )
         elif instruction is _Instruction.NAME:
             assert name, "Must use a `# ^ NAME[tag-name] ^`"
         else:
             assert_never(instruction)
 
     location.write_text("\n".join(result[1:]))
-    return notices
+    return file_notices
 
 
 def normalise_mypy_msg(msg: str) -> str:
@@ -161,8 +178,10 @@ def interpret_mypy_output(
     scenario: protocols.T_Scenario,
     options: protocols.RunOptions[protocols.T_Scenario],
     lines: Sequence[str],
+    program_notices: protocols.ProgramNotices | None = None,
 ) -> protocols.ProgramNotices:
-    final: dict[pathlib.Path, protocols.FileNotices] = {}
+    if program_notices is None:
+        program_notices = notices.ProgramNotices()
 
     matches: list[_MypyOutputLineMatch] = []
 
@@ -185,18 +204,27 @@ def interpret_mypy_output(
 
     for match in matches:
         location = options.cwd / match.filename
-        if location not in final:
-            final[location] = notices.FileNotices(location=location)
 
+        severity: protocols.Severity
         if match.severity == "error":
-            final[location] = final[location].add_error(
-                name_or_line=match.line_number, error_type=match.tag or "", error=match.msg
-            )
+            severity = notices.ErrorSeverity(error_type=match.tag)
         elif match.severity == "note":
-            final[location] = final[location].add_note(
-                name_or_line=match.line_number, note=match.msg
-            )
+            severity = notices.NoteSeverity()
         else:
             raise ValueError(f"Unknown severity: {match.severity}")
 
-    return notices.ProgramNotices(notices=final)
+        program_notices = notice_changers.ModifyFile(
+            location=location,
+            must_exist=False,
+            change=notice_changers.ModifyLine(
+                name_or_line=match.line_number,
+                line_must_exist=False,
+                change=notice_changers.AppendToLine(
+                    notices_maker=lambda line_notices: [
+                        line_notices.generate_notice(severity=severity, msg=match.msg)
+                    ]
+                ),
+            ),
+        )(program_notices)
+
+    return program_notices

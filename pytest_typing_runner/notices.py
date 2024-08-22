@@ -8,7 +8,39 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 
 from typing_extensions import Self, Unpack
 
-from . import protocols
+from . import notice_changers, protocols
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class NoteSeverity:
+    display: str = dataclasses.field(init=False, default="note")
+
+    def __lt__(self, other: protocols.Severity) -> bool:
+        return self.display < other.display
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ErrorSeverity:
+    error_type: str
+
+    def __eq__(self, o: object) -> bool:
+        other_display = getattr(o, "display", None)
+        if not isinstance(other_display, str):
+            return False
+
+        if self.error_type == "":
+            return other_display.startswith("error[")
+        elif other_display == "error[]":
+            return True
+        else:
+            return other_display == self.display
+
+    @property
+    def display(self) -> str:
+        return f"error[{self.error_type}]"
+
+    def __lt__(self, other: protocols.Severity) -> bool:
+        return self.display < other.display
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -20,17 +52,19 @@ class ProgramNotice:
     location: pathlib.Path
     line_number: int
     col: int | None
-    severity: str
-    tag: str | None
+    severity: protocols.Severity
     msg: str
+
+    @classmethod
+    def reveal_msg(cls, revealed: str, /) -> str:
+        return f'Revealed type is "{revealed}"'
 
     def clone(self, **kwargs: Unpack[protocols.ProgramNoticeCloneKwargs]) -> Self:
         return dataclasses.replace(self, **kwargs)
 
     def display(self) -> str:
         col = "" if self.col is None else f" col={self.col}"
-        tag = "" if self.tag is None else f" tag={self.tag} "
-        return f"{col} severity={self.severity} {tag}:: {self.msg}"
+        return f"{col} severity={self.severity.display}:: {self.msg}"
 
     def __lt__(self, other: protocols.ProgramNotice) -> bool:
         return self.display() < other.display()
@@ -40,7 +74,6 @@ class ProgramNotice:
             self.location == other.location
             and self.line_number == other.line_number
             and self.severity == other.severity
-            and self.tag == other.tag
             and self.msg == other.msg
         )
         if not same:
@@ -69,27 +102,39 @@ class LineNotices:
     def add(self, notice: protocols.ProgramNotice) -> Self:
         return dataclasses.replace(self, notices=[*self.notices, notice])
 
-    def replace(
-        self,
-        chooser: protocols.ProgramNoticeChooser,
-        *,
-        replaced: protocols.ProgramNotice,
-        first_only: bool = True,
-    ) -> Self:
-        replacement: list[protocols.ProgramNotice] = []
-        matched: bool = False
-        for n in self.notices:
-            if chooser(n):
-                if not first_only or not matched:
-                    matched = True
-                    replacement.append(replaced)
-                    continue
-            replacement.append(n)
+    @overload
+    def set_notices(
+        self, notices: Sequence[protocols.ProgramNotice | None], allow_empty: Literal[True]
+    ) -> Self: ...
 
+    @overload
+    def set_notices(
+        self,
+        notices: Sequence[protocols.ProgramNotice | None],
+        allow_empty: Literal[False] = False,
+    ) -> Self | None: ...
+
+    def set_notices(
+        self, notices: Sequence[protocols.ProgramNotice | None], allow_empty: bool = False
+    ) -> Self | None:
+        replacement = [n for n in notices if n is not None]
+        if not replacement:
+            if not allow_empty:
+                return None
         return dataclasses.replace(self, notices=replacement)
 
-    def remove(self, chooser: protocols.ProgramNoticeChooser) -> Self:
-        return dataclasses.replace(self, notices=[n for n in self.notices if not chooser(n)])
+    def generate_notice(
+        self, *, severity: protocols.Severity | None = None, msg: str = "", col: int | None = None
+    ) -> protocols.ProgramNotice:
+        if severity is None:
+            severity = NoteSeverity()
+        return ProgramNotice(
+            location=self.location,
+            line_number=self.line_number,
+            severity=severity,
+            msg=msg,
+            col=col,
+        )
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -106,189 +151,58 @@ class FileNotices:
         for _, notices in sorted(self.by_line_number.items()):
             yield from notices
 
-    def notices_for_line_number(self, line_number: int) -> protocols.LineNotices | None:
+    def get_line_number(self, name_or_line: str | int, /) -> int | None:
+        if isinstance(name_or_line, int):
+            return name_or_line
+
+        name = name_or_line
+        if name not in self.name_to_line_number:
+            return None
+
+        return self.name_to_line_number[name]
+
+    def notices_at_line(self, line_number: int) -> protocols.LineNotices | None:
         if line_number not in self.by_line_number:
             return None
 
         return self.by_line_number[line_number]
 
-    def set_line_notices(self, line_number: int, notices: protocols.LineNotices) -> Self:
-        return dataclasses.replace(
-            self, by_line_number={**self.by_line_number, line_number: notices}
-        )
-
-    def add_notice(self, line_number: int, notice: protocols.ProgramNotice) -> Self:
-        notices = self._get_or_create_for_line_number(line_number)
-        return dataclasses.replace(
-            self, by_line_number={**self.by_line_number, line_number: notices.add(notice)}
-        )
+    def generate_notices_for_line(self, line_number: int) -> protocols.LineNotices:
+        return LineNotices(location=self.location, line_number=line_number)
 
     def set_name(self, name: str, line_number: int) -> Self:
         return dataclasses.replace(
             self, name_to_line_number={**self.name_to_line_number, name: line_number}
         )
 
-    def _get_or_create_for_line_number(self, line_number: int) -> protocols.LineNotices:
-        if (existing := self.by_line_number.get(line_number)) is None:
-            return LineNotices(line_number=line_number, location=self.location)
-        else:
-            return existing
+    @overload
+    def set_lines(
+        self, notices: Mapping[int, protocols.LineNotices | None], allow_empty: Literal[True]
+    ) -> Self: ...
 
     @overload
-    def find_for_name_or_line(
-        self, *, name_or_line: str | int, severity: str | None = None, must_exist: Literal[True]
-    ) -> tuple[int, protocols.LineNotices, protocols.ProgramNotice]: ...
-
-    @overload
-    def find_for_name_or_line(
+    def set_lines(
         self,
-        *,
-        name_or_line: str | int,
-        severity: str | None = None,
-        must_exist: Literal[False] = False,
-    ) -> tuple[int, protocols.LineNotices, protocols.ProgramNotice | None]: ...
+        notices: Mapping[int, protocols.LineNotices | None],
+        allow_empty: Literal[False] = False,
+    ) -> Self: ...
 
-    def find_for_name_or_line(
-        self, *, name_or_line: str | int, severity: str | None = None, must_exist: bool = False
-    ) -> tuple[int, protocols.LineNotices, protocols.ProgramNotice | None]:
-        if isinstance(name_or_line, int):
-            line_number = name_or_line
-        else:
-            name = name_or_line
-            if name not in self.name_to_line_number:
-                raise ValueError(f"No named line: {name}")
+    def set_lines(
+        self, notices: Mapping[int, protocols.LineNotices | None], allow_empty: bool = False
+    ) -> Self | None:
+        replacement = dict(self.by_line_number)
+        for line_number, line_notices in notices.items():
+            if line_notices is None:
+                if line_number in replacement:
+                    del replacement[line_number]
+            else:
+                replacement[line_number] = line_notices
 
-            line_number = self.name_to_line_number[name]
+        if not replacement:
+            if allow_empty:
+                return None
 
-        notices = self.notices_for_line_number(line_number)
-        if must_exist and notices is None:
-            raise ValueError(f"No existing notices for named line: {name}")
-
-        if notices is None:
-            return line_number, LineNotices(line_number=line_number, location=self.location), None
-
-        found: protocols.ProgramNotice | None = None
-        for notice in reversed(list(notices)):
-            if severity is None:
-                found = notice
-                break
-
-            if notice.severity == severity:
-                found = notice
-                break
-
-        if must_exist and found is None:
-            raise ValueError(
-                f"Found no existing notice for named line/severity: {name}/{severity}"
-            )
-
-        return line_number, notices, found
-
-    def add_reveal(self, *, name_or_line: str | int, revealed: str) -> Self:
-        line_number, notices, existing = self.find_for_name_or_line(name_or_line=name_or_line)
-        if existing is not None:
-            return self.change_reveal(
-                name_or_line=name_or_line,
-                modify=lambda original: original.clone(
-                    msg=f'{original.msg}\nRevealed type is "{revealed}"'
-                ),
-            )
-
-        return self.set_line_notices(
-            line_number,
-            notices.add(
-                ProgramNotice(
-                    location=self.location,
-                    line_number=line_number,
-                    col=None,
-                    tag=None,
-                    severity="note",
-                    msg=f'Revealed type is "{revealed}"',
-                )
-            ),
-        )
-
-    def change_reveal(
-        self, *, name_or_line: str | int, modify: protocols.ProgramNoticeModify
-    ) -> Self:
-        line_number, notices, existing = self.find_for_name_or_line(
-            name_or_line=name_or_line, severity="note", must_exist=True
-        )
-        return self.set_line_notices(
-            line_number,
-            notices.replace(
-                lambda original: original.matches(existing), replaced=modify(existing)
-            ),
-        )
-
-    def add_error(self, *, name_or_line: str | int, error_type: str, error: str) -> Self:
-        line_number, notices, _ = self.find_for_name_or_line(name_or_line=name_or_line)
-        return self.set_line_notices(
-            line_number,
-            notices.add(
-                ProgramNotice(
-                    location=self.location,
-                    line_number=line_number,
-                    col=None,
-                    tag=error_type,
-                    severity="error",
-                    msg=error,
-                )
-            ),
-        )
-
-    def change_error(
-        self, *, name_or_line: str | int, modify: protocols.ProgramNoticeModify
-    ) -> Self:
-        line_number, notices, existing = self.find_for_name_or_line(
-            name_or_line=name_or_line, severity="error", must_exist=True
-        )
-        return self.set_line_notices(
-            line_number,
-            notices.replace(
-                lambda original: original.matches(existing), replaced=modify(existing)
-            ),
-        )
-
-    def add_note(self, *, name_or_line: str | int, note: str) -> Self:
-        line_number, notices, existing = self.find_for_name_or_line(name_or_line=name_or_line)
-        if existing is not None:
-            return self.change_reveal(
-                name_or_line=name_or_line,
-                modify=lambda original: original.clone(msg=f"{original.msg}\n{note}"),
-            )
-        return self.set_line_notices(
-            line_number,
-            notices.add(
-                ProgramNotice(
-                    location=self.location,
-                    line_number=line_number,
-                    col=None,
-                    tag=None,
-                    severity="note",
-                    msg=note,
-                )
-            ),
-        )
-
-    def change_note(
-        self, *, name_or_line: str | int, modify: protocols.ProgramNoticeModify
-    ) -> Self:
-        line_number, notices, existing = self.find_for_name_or_line(
-            name_or_line=name_or_line, severity="note", must_exist=True
-        )
-        return self.set_line_notices(
-            line_number,
-            notices.replace(
-                lambda original: original.matches(existing), replaced=modify(existing)
-            ),
-        )
-
-    def remove_notices(
-        self, *, name_or_line: str | int, chooser: protocols.ProgramNoticeChooser
-    ) -> Self:
-        line_number, notices, _ = self.find_for_name_or_line(name_or_line=name_or_line)
-        return self.set_line_notices(line_number, notices.remove(chooser))
+        return dataclasses.replace(self, by_line_number=replacement)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -362,78 +276,130 @@ class ProgramNotices:
             }
         )
 
+    def notices_at_location(self, location: pathlib.Path) -> protocols.FileNotices | None:
+        return self.notices.get(location)
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class RevealedType:
-    name: str
-    revealed: str
-    append: bool
+    def generate_notices_for_location(self, location: pathlib.Path) -> protocols.FileNotices:
+        return FileNotices(location=location)
 
-    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
-        if self.append:
-            return notices.add_reveal(name_or_line=self.name, revealed=self.revealed)
-        else:
-            return notices.change_reveal(
-                name_or_line=self.name,
-                modify=lambda original: original.clone(msg=f'Revealed type is "{self.revealed}"'),
-            )
+    def set_files(self, notices: Mapping[pathlib.Path, protocols.FileNotices | None]) -> Self:
+        replacement = dict(self.notices)
+        for location, file_notices in notices.items():
+            if file_notices is None:
+                if location in replacement:
+                    del replacement[location]
+            else:
+                replacement[location] = file_notices
 
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class Error:
-    name: str
-    error: str
-    error_type: str
-    append: bool
-
-    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
-        if self.append:
-            return notices.add_error(
-                name_or_line=self.name, error_type=self.error_type, error=self.error
-            )
-        else:
-            return notices.change_error(
-                name_or_line=self.name,
-                modify=lambda original: original.clone(tag=self.error_type, msg=self.error),
-            )
+        return dataclasses.replace(self, notices=replacement)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SetErrors:
+class AddRevealedTypes:
     name: str
-    errors: Mapping[str, str]
+    revealed: Sequence[str]
+    replace: bool = False
 
-    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
-        line_number, line_notices, _ = notices.find_for_name_or_line(name_or_line=self.name)
+    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices | None:
+        def make_notices(
+            notices: protocols.LineNotices, /
+        ) -> Sequence[protocols.ProgramNotice | None]:
+            return [
+                notices.generate_notice(
+                    severity=NoteSeverity(),
+                    msg="\n".join(
+                        [ProgramNotice.reveal_msg(revealed) for revealed in self.revealed]
+                    ),
+                )
+            ]
 
-        notices = notices.set_line_notices(
-            line_number,
-            line_notices.remove(
-                lambda original: (
-                    original.severity != "note" and not original.msg.startswith("Revealed type is")
-                ),
-            ),
-        )
+        def change(notices: protocols.LineNotices, /) -> protocols.LineNotices | None:
+            if self.replace:
+                notices = notices.set_notices(
+                    [
+                        (
+                            None
+                            if (
+                                notice.severity == NoteSeverity()
+                                and notice.msg.startswith("Revealed type is")
+                            )
+                            else notice
+                        )
+                        for notice in notices
+                    ],
+                    allow_empty=True,
+                )
 
-        for error_type, error in self.errors.items():
-            notices = notices.add_error(name_or_line=self.name, error_type=error_type, error=error)
+            return notice_changers.AppendToLine(notices_maker=make_notices)(notices)
 
-        return notices
+        return notice_changers.ModifyLine(
+            name_or_line=self.name, name_must_exist=True, line_must_exist=False, change=change
+        )(notices)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Note:
+class AddErrors:
     name: str
-    note: str
-    append: bool
+    errors: Sequence[tuple[str, str]]
+    replace: bool = False
 
-    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
-        if self.append:
-            return notices.add_note(name_or_line=self.name, note=self.note)
-        else:
-            return notices.change_note(
-                name_or_line=self.name, modify=lambda original: original.clone(msg=self.note)
-            )
+    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices | None:
+        def make_notices(
+            notices: protocols.LineNotices, /
+        ) -> Sequence[protocols.ProgramNotice | None]:
+            return [
+                notices.generate_notice(severity=ErrorSeverity(error_type=error_type), msg=error)
+                for error_type, error in self.errors
+            ]
+
+        def change(notices: protocols.LineNotices, /) -> protocols.LineNotices | None:
+            if self.replace:
+                notices = notices.set_notices(
+                    [
+                        (None if notice.severity.display.startswith("error") else notice)
+                        for notice in notices
+                    ],
+                    allow_empty=True,
+                )
+            return notice_changers.AppendToLine(notices_maker=make_notices)(notices)
+
+        return notice_changers.ModifyLine(
+            name_or_line=self.name, name_must_exist=True, line_must_exist=False, change=change
+        )(notices)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class AddNotes:
+    name: str
+    notes: Sequence[str]
+    replace: bool = False
+    keep_reveals: bool = True
+
+    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices | None:
+        def make_notices(
+            notices: protocols.LineNotices, /
+        ) -> Sequence[protocols.ProgramNotice | None]:
+            return [
+                notices.generate_notice(severity=NoteSeverity(), msg=note) for note in self.notes
+            ]
+
+        def change(notices: protocols.LineNotices, /) -> protocols.LineNotices | None:
+            if self.replace:
+                replaced: list[protocols.ProgramNotice | None] = []
+                for notice in notices:
+                    if notice.severity == NoteSeverity():
+                        if self.keep_reveals and notice.msg.startswith("Revealed type is"):
+                            replaced.append(notice)
+                    else:
+                        replaced.append(notice)
+
+                notices = notices.set_notices(replaced, allow_empty=True)
+
+            return notice_changers.AppendToLine(notices_maker=make_notices)(notices)
+
+        return notice_changers.ModifyLine(
+            name_or_line=self.name, name_must_exist=True, line_must_exist=False, change=change
+        )(notices)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -441,11 +407,19 @@ class RemoveFromRevealedType:
     name: str
     remove: str
 
-    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
-        return notices.change_reveal(
-            name_or_line=self.name,
-            modify=lambda original: original.clone(msg=original.msg.replace(self.remove, "")),
-        )
+    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices | None:
+        def change(notices: protocols.LineNotices, /) -> protocols.LineNotices | None:
+            replaced: list[protocols.ProgramNotice | None] = []
+            for notice in notices:
+                if notice.severity == NoteSeverity() and notice.msg.startswith("Revealed type is"):
+                    notice = notice.clone(msg=notice.msg.replace(self.remove, ""))
+                replaced.append(notice)
+
+            return notices.set_notices(replaced)
+
+        return notice_changers.ModifyLine(
+            name_or_line=self.name, name_must_exist=True, line_must_exist=False, change=change
+        )(notices)
 
 
 if TYPE_CHECKING:
@@ -455,8 +429,12 @@ if TYPE_CHECKING:
     _DN: protocols.DiffNotices = cast(DiffNotices, None)
     _DFN: protocols.DiffFileNotices = cast(DiffFileNotices, None)
 
-    _N: protocols.FileNoticesChanger = cast(Note, None)
-    _E: protocols.FileNoticesChanger = cast(Error, None)
-    _SE: protocols.FileNoticesChanger = cast(SetErrors, None)
-    _RT: protocols.FileNoticesChanger = cast(RevealedType, None)
-    _RFRT: protocols.FileNoticesChanger = cast(RemoveFromRevealedType, None)
+    _N: protocols.ProgramNoticeChanger[protocols.FileNotices] = cast(AddNotes, None)
+    _E: protocols.ProgramNoticeChanger[protocols.FileNotices] = cast(AddErrors, None)
+    _SE: protocols.ProgramNoticeChanger[protocols.FileNotices] = cast(AddRevealedTypes, None)
+    _RFRT: protocols.ProgramNoticeChanger[protocols.FileNotices] = cast(
+        RemoveFromRevealedType, None
+    )
+
+    _NS: protocols.Severity = cast(NoteSeverity, None)
+    _ES: protocols.Severity = cast(ErrorSeverity, None)

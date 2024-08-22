@@ -20,7 +20,7 @@ class ScenarioFile:
     file_parser: protocols.FileNoticesParser
     file_modification: protocols.FileModifier
 
-    _overrides: list[protocols.FileNoticesChanger] = dataclasses.field(
+    _overrides: list[protocols.ProgramNoticeChanger[protocols.FileNotices]] = dataclasses.field(
         init=False, default_factory=list
     )
 
@@ -41,7 +41,7 @@ class ScenarioFile:
         )
         return self
 
-    def expect(self, *instructions: protocols.FileNoticesChanger) -> Self:
+    def expect(self, *instructions: protocols.ProgramNoticeChanger[protocols.FileNotices]) -> Self:
         for instruction in instructions:
             self._overrides.append(instruction)
         return self
@@ -53,16 +53,23 @@ class ScenarioFile:
             self._file_parser_override[None] = parser
         return self
 
-    def notices(self) -> protocols.FileNotices:
+    def notices(self) -> protocols.FileNotices | None:
         parser = self.file_parser
         if None in self._file_parser_override:
             parser = self._file_parser_override[None]
 
-        notices = parser(location=self.root_dir / self.path)
+        file_notices = parser(location=self.root_dir / self.path)
         for instruction in self._overrides:
-            notices = instruction(notices)
+            changed = instruction(file_notices)
+            if changed is None:
+                file_notices = notices.FileNotices(location=file_notices.location)
+            else:
+                file_notices = changed
 
-        return notices
+        if not file_notices.has_notices:
+            return None
+
+        return file_notices
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -115,8 +122,8 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
             options=options,
             expect_fail=scenario_runner.scenario.expect_fail,
             expect_stderr="",
-            expect_notices=notices.ProgramNotices(
-                notices={
+            expect_notices=notices.ProgramNotices().set_files(
+                {
                     scenario_runner.scenario.root_dir / path: known.notices()
                     for path, known in self._known_files.items()
                 }
