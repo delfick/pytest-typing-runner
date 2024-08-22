@@ -82,7 +82,15 @@ class ErrorSeverity:
 @dataclasses.dataclass(kw_only=True)
 class ProgramNotice:
     """
+    Default implementation for :protocol:`pytest_typing_runner.protocols.ProgramNotices`
+
     Represents a single notice from the static type checker
+
+    :param location: The full path to the file this notice is for
+    :param line_number: the line this notice appears on
+    :param col: optional line representing the column the error relates to
+    :param severity: The severity of the notice (either note or error with a specific error type)
+    :param msg: The message in the notice
     """
 
     location: pathlib.Path
@@ -93,19 +101,42 @@ class ProgramNotice:
 
     @classmethod
     def reveal_msg(cls, revealed: str, /) -> str:
+        """
+        Helper to get a string that represents the ``msg`` on a note for a ``reveal_type(...)`` instruction
+        """
         return f'Revealed type is "{revealed}"'
 
     def clone(self, **kwargs: Unpack[protocols.ProgramNoticeCloneKwargs]) -> Self:
+        """
+        Return a copy of this notice with certain values replaced.
+        """
         return dataclasses.replace(self, **kwargs)
 
     def display(self) -> str:
-        col = "" if self.col is None else f" col={self.col}"
-        return f"{col} severity={self.severity.display}:: {self.msg}"
+        """
+        Return a string for displaying this notice.
+
+        If ``col`` is None then it's not displayed.
+
+        Will return "col=COL severity=SEVERITY:: MSG"
+        """
+        col = "" if self.col is None else f"col={self.col} "
+        return f"{col}severity={self.severity.display}:: {self.msg}"
 
     def __lt__(self, other: protocols.ProgramNotice) -> bool:
+        """
+        Allow ordering against other notices in a sequence
+
+        Orders by comparing the "display" string
+        """
         return self.display() < other.display()
 
     def matches(self, other: protocols.ProgramNotice) -> bool:
+        """
+        Compare against another program notice.
+
+        If ``col`` is ``None`` on either notice then that is not compared.
+        """
         same = (
             self.location == other.location
             and self.line_number == other.line_number
@@ -115,10 +146,10 @@ class ProgramNotice:
         if not same:
             return False
 
-        if self.col is not None or other.col is not None:
-            return self.col == other.col
+        if self.col is None or other.col is None:
+            return True
 
-        return True
+        return self.col == other.col
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
