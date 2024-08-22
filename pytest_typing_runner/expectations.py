@@ -1,5 +1,6 @@
 import dataclasses
 import itertools
+from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self
@@ -60,6 +61,17 @@ class Expectations(Generic[protocols.T_Scenario]):
         return cls(options=options, expect_fail=False)
 
 
+def normalise_notices(
+    notices: Sequence[protocols.ProgramNotice],
+) -> Iterator[protocols.ProgramNotice]:
+    for notice in sorted(notices):
+        if "\n" in notice.msg:
+            for line in notice.msg.split("\n"):
+                yield notice.clone(msg=line)
+        else:
+            yield notice
+
+
 def compare_notices(diff: protocols.DiffNotices) -> None:
     tick = "✓"
     cross = "✘"
@@ -70,6 +82,9 @@ def compare_notices(diff: protocols.DiffNotices) -> None:
     for path, fdiff in diff:
         msg.append(f"> {path}")
         for line_number, left_notices, right_notices in fdiff:
+            left_notices = list(normalise_notices(left_notices))
+            right_notices = list(normalise_notices(right_notices))
+
             for_line: list[str | tuple[str, str]] = []
 
             for left, right in itertools.zip_longest(left_notices, right_notices):

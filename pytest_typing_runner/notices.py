@@ -15,6 +15,8 @@ from . import notice_changers, protocols
 class NoteSeverity:
     """
     Represents a "note" severity
+
+    Implements :protocol:`pytest_typing_runner.protocols.Severity`
     """
 
     display: str = dataclasses.field(init=False, default="note")
@@ -40,6 +42,8 @@ class ErrorSeverity:
 
     Note that if the ``error_type`` is an empty string that comparisons with
     other severities will match any ``error_type``.
+
+    Implements :protocol:`pytest_typing_runner.protocols.Severity`
 
     :param error_type: The specific type of error. For example ``arg-type`` or ``assignment``
     """
@@ -82,9 +86,9 @@ class ErrorSeverity:
 @dataclasses.dataclass(kw_only=True)
 class ProgramNotice:
     """
-    Default implementation for :protocol:`pytest_typing_runner.protocols.ProgramNotices`
-
     Represents a single notice from the static type checker
+
+    Implements :protocol:`pytest_typing_runner.protocols.ProgramNotice`
 
     :param location: The full path to the file this notice is for
     :param line_number: the line this notice appears on
@@ -155,9 +159,9 @@ class ProgramNotice:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class LineNotices:
     """
-    Default implementation for :protocol:`pytest_typing_runner.protocols.LineNotices`
-
     This represents the notices at a specific line in a specific file
+
+    Implements :protocol:`pytest_typing_runner.protocols.LineNotices`
 
     :param location: The path these notices are for
     :param line_number: The specific line number for these notices
@@ -233,6 +237,8 @@ class LineNotices:
 class FileNotices:
     """
     Used to represent the notices for a file
+
+    Implements :protocol:`pytest_typing_runner.protocols.FileNotices`
 
     :param location: The location of the file the notices are in
     """
@@ -331,6 +337,13 @@ class FileNotices:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class DiffFileNotices:
+    """
+    Used to represent the notices for many lines of a single file between two
+    runs of a type checker
+
+    Implements :protocol:`pytest_typing_runner.protocols.DiffFileNotices`
+    """
+
     by_line_number: Mapping[
         int, tuple[Sequence[protocols.ProgramNotice], Sequence[protocols.ProgramNotice]]
     ]
@@ -341,11 +354,17 @@ class DiffFileNotices:
         tuple[int, Sequence[protocols.ProgramNotice], Sequence[protocols.ProgramNotice]]
     ]:
         for line_number, (left_notices, right_notices) in sorted(self.by_line_number.items()):
-            yield line_number, sorted(left_notices), sorted(right_notices)
+            yield line_number, left_notices, right_notices
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class DiffNotices:
+    """
+    Used to represent the notices for many files between two runs of a type checker
+
+    Implements :protocol:`pytest_typing_runner.protocols.DiffNotices`
+    """
+
     by_file: Mapping[str, protocols.DiffFileNotices]
 
     def __iter__(self) -> Iterator[tuple[str, protocols.DiffFileNotices]]:
@@ -381,8 +400,7 @@ class ProgramNotices:
                 else:
                     path = str(notice.location)
 
-                for line in notice.msg.split("\n"):
-                    into[path][notice.line_number].append(notice.clone(msg=line))
+                into[path][notice.line_number].append(notice)
 
         final: dict[
             str, dict[int, tuple[list[protocols.ProgramNotice], list[protocols.ProgramNotice]]]
