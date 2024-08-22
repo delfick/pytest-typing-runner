@@ -20,7 +20,7 @@ class ScenarioFile:
     file_parser: protocols.FileNoticesParser
     file_modification: protocols.FileModifier
 
-    _overrides: list[protocols.ProgramNoticeChanger[protocols.FileNotices]] = dataclasses.field(
+    _overrides: list[protocols.FileNoticesChanger] = dataclasses.field(
         init=False, default_factory=list
     )
 
@@ -41,7 +41,7 @@ class ScenarioFile:
         )
         return self
 
-    def expect(self, *instructions: protocols.ProgramNoticeChanger[protocols.FileNotices]) -> Self:
+    def expect(self, *instructions: protocols.FileNoticesChanger) -> Self:
         for instruction in instructions:
             self._overrides.append(instruction)
         return self

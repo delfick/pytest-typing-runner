@@ -231,19 +231,44 @@ class LineNotices:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class FileNotices:
+    """
+    Used to represent the notices for a file
+
+    :param location: The location of the file the notices are in
+    """
+
     location: pathlib.Path
     by_line_number: Mapping[int, protocols.LineNotices] = dataclasses.field(default_factory=dict)
     name_to_line_number: Mapping[str, int] = dataclasses.field(default_factory=dict)
 
     @property
     def has_notices(self) -> bool:
+        """
+        Return True if there are there any notices for this file
+        """
         return any(notices for notices in self.by_line_number.values())
 
     def __iter__(self) -> Iterator[protocols.ProgramNotice]:
+        """
+        Yield all the notices for the file
+        """
         for _, notices in sorted(self.by_line_number.items()):
             yield from notices
 
     def get_line_number(self, name_or_line: str | int, /) -> int | None:
+        """
+        Normalise a name or line number to a line number.
+
+        The result has no relation to whether there are any notices for this file
+
+        :param name_or_line:
+            When this is an integer it is returned as is regardless of whether it is
+            named or has associated notices.
+
+            When it is a string, it will see if it is a registered name and either
+            return ``None`` if it is not registered, else return the associated
+            line number.
+        """
         if isinstance(name_or_line, int):
             return name_or_line
 
@@ -254,34 +279,45 @@ class FileNotices:
         return self.name_to_line_number[name]
 
     def notices_at_line(self, line_number: int) -> protocols.LineNotices | None:
+        """
+        Return ``None`` if there are no line notices for that line number, else
+        return the found line notices.
+
+        Note that if there is an empty line notices that will be returned instead
+        of None.
+        """
         if line_number not in self.by_line_number:
             return None
 
         return self.by_line_number[line_number]
 
     def generate_notices_for_line(self, line_number: int) -> protocols.LineNotices:
+        """
+        Return an object that satisfies :protocol:`pytest_typing_runner.protocols.LineNotices`
+        for the location of this file at the specified line number.
+
+        This object is not added to this file notices
+        """
         return LineNotices(location=self.location, line_number=line_number)
 
     def set_name(self, name: str, line_number: int) -> Self:
+        """
+        Return a copy of the file notices with this ``name`` registered for
+        the specified ``line_number``. If the ``name`` is already registered it
+        will be overridden.
+        """
         return dataclasses.replace(
             self, name_to_line_number={**self.name_to_line_number, name: line_number}
         )
 
-    @overload
-    def set_lines(
-        self, notices: Mapping[int, protocols.LineNotices | None], allow_empty: Literal[True]
-    ) -> Self: ...
+    def set_lines(self, notices: Mapping[int, protocols.LineNotices | None]) -> Self:
+        """
+        Return a copy of this file notices with the notices replaced by those
+        provided.
 
-    @overload
-    def set_lines(
-        self,
-        notices: Mapping[int, protocols.LineNotices | None],
-        allow_empty: Literal[False] = False,
-    ) -> Self: ...
-
-    def set_lines(
-        self, notices: Mapping[int, protocols.LineNotices | None], allow_empty: bool = False
-    ) -> Self | None:
+        When the value is ``None`` any notices for that line number will be
+        removed.
+        """
         replacement = dict(self.by_line_number)
         for line_number, line_notices in notices.items():
             if line_notices is None:
@@ -289,10 +325,6 @@ class FileNotices:
                     del replacement[line_number]
             else:
                 replacement[line_number] = line_notices
-
-        if not replacement:
-            if allow_empty:
-                return None
 
         return dataclasses.replace(self, by_line_number=replacement)
 
@@ -392,7 +424,7 @@ class AddRevealedTypes:
     revealed: Sequence[str]
     replace: bool = False
 
-    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices | None:
+    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
         def make_notices(
             notices: protocols.LineNotices, /
         ) -> Sequence[protocols.ProgramNotice | None]:
@@ -435,7 +467,7 @@ class AddErrors:
     errors: Sequence[tuple[str, str]]
     replace: bool = False
 
-    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices | None:
+    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
         def make_notices(
             notices: protocols.LineNotices, /
         ) -> Sequence[protocols.ProgramNotice | None]:
@@ -467,7 +499,7 @@ class AddNotes:
     replace: bool = False
     keep_reveals: bool = True
 
-    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices | None:
+    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
         def make_notices(
             notices: protocols.LineNotices, /
         ) -> Sequence[protocols.ProgramNotice | None]:
@@ -499,7 +531,7 @@ class RemoveFromRevealedType:
     name: str
     remove: str
 
-    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices | None:
+    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
         def change(notices: protocols.LineNotices, /) -> protocols.LineNotices | None:
             replaced: list[protocols.ProgramNotice | None] = []
             for notice in notices:
@@ -521,12 +553,10 @@ if TYPE_CHECKING:
     _DN: protocols.DiffNotices = cast(DiffNotices, None)
     _DFN: protocols.DiffFileNotices = cast(DiffFileNotices, None)
 
-    _N: protocols.ProgramNoticeChanger[protocols.FileNotices] = cast(AddNotes, None)
-    _E: protocols.ProgramNoticeChanger[protocols.FileNotices] = cast(AddErrors, None)
-    _SE: protocols.ProgramNoticeChanger[protocols.FileNotices] = cast(AddRevealedTypes, None)
-    _RFRT: protocols.ProgramNoticeChanger[protocols.FileNotices] = cast(
-        RemoveFromRevealedType, None
-    )
+    _N: protocols.FileNoticesChanger = cast(AddNotes, None)
+    _E: protocols.FileNoticesChanger = cast(AddErrors, None)
+    _SE: protocols.FileNoticesChanger = cast(AddRevealedTypes, None)
+    _RFRT: protocols.FileNoticesChanger = cast(RemoveFromRevealedType, None)
 
     _NS: protocols.Severity = cast(NoteSeverity, None)
     _ES: protocols.Severity = cast(ErrorSeverity, None)

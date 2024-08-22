@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Literal, Protocol, TypedDict, TypeVar, cast, o
 from typing_extensions import NotRequired, Self, Unpack
 
 T_Scenario = TypeVar("T_Scenario", bound="Scenario")
-T_NoticesLayer = TypeVar("T_NoticesLayer", "FileNotices", "LineNotices", "ProgramNotice")
 T_CO_Scenario = TypeVar("T_CO_Scenario", bound="Scenario", covariant=True)
 T_CO_ScenarioFile = TypeVar("T_CO_ScenarioFile", bound="P_ScenarioFile", covariant=True)
 
@@ -272,8 +271,16 @@ class ProgramNoticesChanger(Protocol):
     def __call__(self, notices: ProgramNotices, /) -> ProgramNotices: ...
 
 
-class ProgramNoticeChanger(Protocol[T_NoticesLayer]):
-    def __call__(self, notices: T_NoticesLayer, /) -> T_NoticesLayer | None: ...
+class FileNoticesChanger(Protocol):
+    def __call__(self, notices: FileNotices, /) -> FileNotices: ...
+
+
+class LineNoticesChanger(Protocol):
+    def __call__(self, notices: LineNotices, /) -> LineNotices | None: ...
+
+
+class ProgramNoticeChanger(Protocol):
+    def __call__(self, notice: ProgramNotice, /) -> ProgramNotice | None: ...
 
 
 class ProgramNoticeCloneKwargs(TypedDict):
@@ -452,7 +459,7 @@ class FileNotices(Protocol):
         """
         Return a line notices for this location at the specified line
 
-        Note this does not add the notices to this FileNotices
+        Implementations should not add this generated object to itself.
         """
 
     def set_name(self, name: str, line_number: int) -> Self:
@@ -460,23 +467,11 @@ class FileNotices(Protocol):
         Associate a name with a specific line number
         """
 
-    @overload
-    def set_lines(
-        self, notices: Mapping[int, LineNotices | None], *, allow_empty: Literal[True]
-    ) -> Self: ...
-
-    @overload
-    def set_lines(
-        self, notices: Mapping[int, LineNotices | None], *, allow_empty: Literal[False] = False
-    ) -> Self | None: ...
-
-    def set_lines(
-        self, notices: Mapping[int, LineNotices | None], *, allow_empty: bool = False
-    ) -> Self | None:
+    def set_lines(self, notices: Mapping[int, LineNotices | None]) -> Self:
         """
         Return a modified notices with these notices for the specified line numbers
 
-        If there are no notices remaining then return None to indicate a deleted file
+        Any None values will result in that line number being removed
         """
 
 
@@ -718,8 +713,10 @@ if TYPE_CHECKING:
     P_ProgramNotice = ProgramNotice
     P_ProgramNotices = ProgramNotices
     P_FileNoticesParser = FileNoticesParser
-    P_ProgramNoticeChanger = ProgramNoticeChanger
     P_ProgramNoticesChanger = ProgramNoticesChanger
+    P_FileNoticesChanger = FileNoticesChanger
+    P_LineNoticesChanger = FileNoticesChanger
+    P_ProgramNoticeChanger = ProgramNoticeChanger
     P_DiffNotices = DiffNotices
     P_DiffFileNotices = DiffFileNotices
 

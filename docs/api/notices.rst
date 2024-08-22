@@ -33,6 +33,10 @@ These are the default implementations of the different layers of the notices:
    :members:
    :member-order: bysource
 
-.. autoclass:: pytest_typing_runner.notices.LineNotices(*, location: ~pathlib.Path, line_number: int)
+.. autoclass:: pytest_typing_runner.notices.LineNotices(location: ~pathlib.Path, line_number: int)
+   :members:
+   :member-order: bysource
+
+.. autoclass:: pytest_typing_runner.notices.FileNotices(location: ~pathlib.Path)
    :members:
    :member-order: bysource

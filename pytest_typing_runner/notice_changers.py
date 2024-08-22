@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import pathlib
 from collections.abc import Callable, MutableMapping, Sequence
-from typing import TYPE_CHECKING, Literal, cast, overload
+from typing import TYPE_CHECKING, cast
 
 from . import errors, protocols
 
@@ -25,7 +25,7 @@ class MissingNotices(errors.PyTestTypingRunnerException):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class FirstMatchOnly:
-    change: protocols.ProgramNoticeChanger[protocols.ProgramNotice]
+    change: protocols.ProgramNoticeChanger
     found: MutableMapping[None, None] = dataclasses.field(init=False, default_factory=dict)
 
     def __call__(self, notice: protocols.ProgramNotice, /) -> protocols.ProgramNotice | None:
@@ -40,7 +40,7 @@ class FirstMatchOnly:
 class ChangeOnMatch:
     msg_prefix: str
     match_severity: protocols.Severity
-    change: protocols.ProgramNoticeChanger[protocols.ProgramNotice]
+    change: protocols.ProgramNoticeChanger
 
     def __call__(self, notices: protocols.LineNotices, /) -> protocols.LineNotices | None:
         replacement: list[protocols.ProgramNotice | None] = []
@@ -67,7 +67,7 @@ class AppendToLine:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ModifyLatestMatch:
     must_exist: bool = False
-    change: protocols.ProgramNoticeChanger[protocols.ProgramNotice]
+    change: protocols.ProgramNoticeChanger
     matcher: Callable[[protocols.ProgramNotice], bool]
 
     def __call__(self, notices: protocols.LineNotices) -> protocols.LineNotices | None:
@@ -95,21 +95,9 @@ class ModifyLine:
     name_or_line: str | int
     name_must_exist: bool = True
     line_must_exist: bool = True
-    change: protocols.ProgramNoticeChanger[protocols.LineNotices]
+    change: protocols.LineNoticesChanger
 
-    @overload
-    def __call__(
-        self, notices: protocols.FileNotices, /, *, allow_empty: Literal[True]
-    ) -> protocols.FileNotices: ...
-
-    @overload
-    def __call__(
-        self, notices: protocols.FileNotices, /, *, allow_empty: Literal[False] = False
-    ) -> protocols.FileNotices | None: ...
-
-    def __call__(
-        self, notices: protocols.FileNotices, /, *, allow_empty: bool = False
-    ) -> protocols.FileNotices | None:
+    def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
         line_notices: protocols.LineNotices | None = None
         line_number = notices.get_line_number(self.name_or_line)
         if line_number is not None:
@@ -132,18 +120,14 @@ class ModifyLine:
             line_notices = notices.generate_notices_for_line(line_number)
 
         change = {line_number: self.change(line_notices)}
-        if allow_empty:
-            # Statically pass in True to make the return type statically correct
-            return notices.set_lines(change, allow_empty=True)
-        else:
-            return notices.set_lines(change, allow_empty=False)
+        return notices.set_lines(change)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ModifyFile:
     location: pathlib.Path
     must_exist: bool = True
-    change: protocols.ProgramNoticeChanger[protocols.FileNotices]
+    change: protocols.FileNoticesChanger
 
     def __call__(self, notices: protocols.ProgramNotices) -> protocols.ProgramNotices:
         file_notices = notices.notices_at_location(self.location)
@@ -157,9 +141,9 @@ class ModifyFile:
 
 
 if TYPE_CHECKING:
-    _FMO: protocols.ProgramNoticeChanger[protocols.ProgramNotice] = cast(FirstMatchOnly, None)
-    _COM: protocols.ProgramNoticeChanger[protocols.LineNotices] = cast(ChangeOnMatch, None)
-    _ATL: protocols.ProgramNoticeChanger[protocols.LineNotices] = cast(AppendToLine, None)
-    _ATLM: protocols.ProgramNoticeChanger[protocols.LineNotices] = cast(ModifyLatestMatch, None)
-    _ML: protocols.ProgramNoticeChanger[protocols.FileNotices] = cast(ModifyLine, None)
+    _FMO: protocols.ProgramNoticeChanger = cast(FirstMatchOnly, None)
+    _COM: protocols.LineNoticesChanger = cast(ChangeOnMatch, None)
+    _ATL: protocols.LineNoticesChanger = cast(AppendToLine, None)
+    _MLM: protocols.LineNoticesChanger = cast(ModifyLatestMatch, None)
+    _ML: protocols.FileNoticesChanger = cast(ModifyLine, None)
     _MF: protocols.ProgramNoticesChanger = cast(ModifyFile, None)

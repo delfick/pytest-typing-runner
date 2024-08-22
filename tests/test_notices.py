@@ -321,3 +321,101 @@ class TestLineNotices:
         assert n3.severity == notices.NoteSeverity()
         assert n3.msg == "other"
         assert n3.col is None
+
+
+class TestFileNotices:
+    def test_it_has_properties(self, tmp_path: pathlib.Path) -> None:
+        file_notices = notices.FileNotices(location=tmp_path)
+        assert file_notices.location == tmp_path
+        assert not file_notices.has_notices
+        assert list(file_notices) == []
+
+    def test_it_can_be_given_notices(self, tmp_path: pathlib.Path) -> None:
+        file_notices = notices.FileNotices(location=tmp_path)
+
+        ln1 = file_notices.generate_notices_for_line(2)
+        n1 = ln1.generate_notice()
+        n2 = ln1.generate_notice()
+        ln1 = ln1.set_notices([n1, n2], allow_empty=True)
+
+        ln2 = file_notices.generate_notices_for_line(3)
+        n3 = ln2.generate_notice()
+        n4 = ln2.generate_notice()
+        ln2 = ln2.set_notices([n3, n4], allow_empty=True)
+
+        copy = file_notices.set_lines({2: ln1, 3: ln2})
+        assert not file_notices.has_notices
+        assert list(file_notices) == []
+        assert copy.has_notices
+        assert list(copy) == [n1, n2, n3, n4]
+
+    def test_it_can_have_lines_removed(self, tmp_path: pathlib.Path) -> None:
+        file_notices = notices.FileNotices(location=tmp_path)
+
+        ln1 = file_notices.generate_notices_for_line(2)
+        n1 = ln1.generate_notice()
+        n2 = ln1.generate_notice()
+        ln1 = ln1.set_notices([n1, n2], allow_empty=True)
+
+        ln2 = file_notices.generate_notices_for_line(3)
+        n3 = ln2.generate_notice()
+        n4 = ln2.generate_notice()
+        ln2 = ln2.set_notices([n3, n4], allow_empty=True)
+
+        file_notices = file_notices.set_lines({2: ln1, 3: ln2})
+        assert file_notices.notices_at_line(2) == ln1
+        assert file_notices.notices_at_line(3) == ln2
+
+        file_notices = file_notices.set_lines({3: None})
+        assert file_notices.notices_at_line(2) == ln1
+        assert file_notices.notices_at_line(3) is None
+        assert file_notices.has_notices
+        assert list(file_notices) == [n1, n2]
+
+        file_notices = file_notices.set_lines({2: None})
+        assert not file_notices.has_notices
+        assert file_notices.notices_at_line(2) is None
+        assert list(file_notices) == []
+
+    def test_it_can_set_and_keep_named_lines(self, tmp_path: pathlib.Path) -> None:
+        file_notices = notices.FileNotices(location=tmp_path).set_name("one", 2).set_name("two", 3)
+
+        ln1 = file_notices.generate_notices_for_line(2)
+        n1 = ln1.generate_notice()
+        n2 = ln1.generate_notice()
+        ln1 = ln1.set_notices([n1, n2], allow_empty=True)
+
+        ln2 = file_notices.generate_notices_for_line(3)
+        n3 = ln2.generate_notice()
+        n4 = ln2.generate_notice()
+        ln2 = ln2.set_notices([n3, n4], allow_empty=True)
+
+        assert file_notices.get_line_number("one") == 2
+        assert file_notices.get_line_number("two") == 3
+        assert not file_notices.has_notices
+        assert list(file_notices) == []
+
+        file_notices = file_notices.set_lines({2: ln1, 3: ln2})
+        assert file_notices.has_notices
+        assert list(file_notices) == [n1, n2, n3, n4]
+        assert file_notices.notices_at_line(2) == ln1
+        assert file_notices.notices_at_line(3) == ln2
+        assert file_notices.get_line_number("one") == 2
+        assert file_notices.get_line_number("two") == 3
+
+        file_notices = file_notices.set_lines({2: None, 3: None})
+        assert not file_notices.has_notices
+        assert list(file_notices) == []
+        assert file_notices.notices_at_line(2) is None
+        assert file_notices.notices_at_line(3) is None
+        assert file_notices.get_line_number("one") == 2
+        assert file_notices.get_line_number("two") == 3
+
+    def test_it_has_logic_for_finding_expected_named_lines(self, tmp_path: pathlib.Path) -> None:
+        file_notices = notices.FileNotices(location=tmp_path).set_name("one", 2).set_name("two", 3)
+
+        assert file_notices.get_line_number(1) == 1
+        assert file_notices.get_line_number(2) == 2
+        assert file_notices.get_line_number("one") == 2
+        assert file_notices.get_line_number("two") == 3
+        assert file_notices.get_line_number("three") is None

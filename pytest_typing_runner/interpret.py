@@ -91,11 +91,11 @@ def parse_notices_from_file(file_notices: protocols.FileNotices, /) -> protocols
             file_notices = file_notices.set_name(name, previous_code_line_number)
 
         def modify_line(
-            line: int, /, *, change: protocols.ProgramNoticeChanger[protocols.LineNotices]
+            line: int, /, *, change: protocols.LineNoticesChanger
         ) -> protocols.FileNotices:
             return notice_changers.ModifyLine(
                 name_or_line=line, line_must_exist=False, change=change
-            )(file_notices, allow_empty=True)
+            )(file_notices)
 
         if instruction is _Instruction.REVEAL:
             previous_line = result[previous_code_line_number].strip()
