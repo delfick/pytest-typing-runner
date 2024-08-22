@@ -247,6 +247,10 @@ class ScenarioRuns(Protocol[T_Scenario]):
 
 
 class Severity(Protocol):
+    """
+    Used to represent the severity of a notice
+    """
+
     @property
     def display(self) -> str:
         """
@@ -255,12 +259,12 @@ class Severity(Protocol):
 
     def __eq__(self, other: object) -> bool:
         """
-        For comparison
+        Determine if this is equal to another object
         """
 
     def __lt__(self, other: Severity) -> bool:
         """
-        For ordering severities
+        To allow ordering a sequence of severity objects
         """
 
 

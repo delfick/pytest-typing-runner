@@ -13,33 +13,69 @@ from . import notice_changers, protocols
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class NoteSeverity:
+    """
+    Represents a "note" severity
+    """
+
     display: str = dataclasses.field(init=False, default="note")
 
     def __lt__(self, other: protocols.Severity) -> bool:
         return self.display < other.display
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class ErrorSeverity:
-    error_type: str
 
     def __eq__(self, o: object) -> bool:
         other_display = getattr(o, "display", None)
         if not isinstance(other_display, str):
             return False
 
+        return self.display == other_display
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ErrorSeverity:
+    """
+    Represents an "error" severity with an error type
+
+    The display will be ``error[ERROR_TYPE]`` and comparisons/ordering
+    will take the ``error_type`` into account.
+
+    Note that if the ``error_type`` is an empty string that comparisons with
+    other severities will match any ``error_type``.
+
+    :param error_type: The specific type of error. For example ``arg-type`` or ``assignment``
+    """
+
+    error_type: str
+
+    def __eq__(self, o: object) -> bool:
+        """
+        This is equal to another object if that object has ``.display`` as a string
+        that is ``error[error_type]``.
+
+        If ``self.error_type`` is an empty string then the ``[error_type]`` on the object
+        being compared to will be ignored.
+        """
+        other_display = getattr(o, "display", None)
+        if not isinstance(other_display, str):
+            return False
+
         if self.error_type == "":
-            return other_display.startswith("error[")
-        elif other_display == "error[]":
+            return other_display.startswith("error[") or other_display == "error"
+        elif other_display in ("error", "error[]"):
             return True
         else:
             return other_display == self.display
 
     @property
     def display(self) -> str:
+        """
+        Display the error as ``error[{self.error_type}]``
+        """
         return f"error[{self.error_type}]"
 
     def __lt__(self, other: protocols.Severity) -> bool:
+        """
+        Order by the ``display`` property
+        """
         return self.display < other.display
 
 
