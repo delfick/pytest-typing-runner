@@ -7,6 +7,7 @@
    api/configuration
    api/protocols
    api/notices
+   api/notice_changers
    api/file_changer
 
 .. include:: ../README.rst

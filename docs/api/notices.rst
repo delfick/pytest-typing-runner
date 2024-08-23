@@ -17,6 +17,10 @@ This plugin has a hierarchy to represent all those notices;
 * has many :protocol:`pytest_typing_runner.protocols.LineNotices`
 * has many :protocol:`pytest_typing_runner.protocols.ProgramNotice`
 
+.. note::
+   There are :ref:`notice_changers <notice_changers>` for modifying notices instead
+   of directly accessing the api on the notices themselves
+
 The :protocol:`pytest_typing_runner.protocols.ProgramNotice` has on it the file
 location, the line number, an optional column number, a severity, and a message.
 
