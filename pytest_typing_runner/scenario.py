@@ -4,7 +4,7 @@ import dataclasses
 import pathlib
 import shutil
 import textwrap
-from collections.abc import Iterator, MutableSequence, Sequence
+from collections.abc import Iterator, MutableMapping, MutableSequence, Sequence
 from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self, assert_never
@@ -26,6 +26,24 @@ class RunnerConfig:
             raise ValueError(
                 "The DAEMON strategy cannot also be in run in the same pytest process"
             )
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class RunCleaners:
+    """
+    Object that holds cleanup functions to be run at the end
+    of the test
+    """
+
+    _cleaners: MutableMapping[str, protocols.RunCleaner] = dataclasses.field(
+        init=False, default_factory=dict
+    )
+
+    def add(self, unique_identifier: str, cleaner: protocols.RunCleaner) -> None:
+        self._cleaners[unique_identifier] = cleaner
+
+    def __iter__(self) -> Iterator[protocols.RunCleaner]:
+        yield from self._cleaners.values()
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -174,6 +192,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
     ) -> None:
         self.scenario = scenario_maker(config=config, root_dir=root_dir)
         self.runs = self.create_scenario_runs()
+        self.cleaners = RunCleaners()
 
     def create_scenario_runs(self) -> protocols.ScenarioRuns[protocols.T_Scenario]:
         """
@@ -298,6 +317,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
             args=args,
             do_followup=do_followup,
             environment_overrides={},
+            cleaners=self.cleaners,
         )
 
 
@@ -314,3 +334,5 @@ if TYPE_CHECKING:
     _CSR: protocols.ScenarioRuns[C_Scenario] = cast(C_ScenarioRuns, None)
     _CSM: protocols.ScenarioMaker[C_Scenario] = C_Scenario.create
     _CSRU: protocols.ScenarioRunner[C_Scenario] = cast(C_ScenarioRunner, None)
+
+    _RCS: protocols.RunCleaners = cast(RunCleaners, None)

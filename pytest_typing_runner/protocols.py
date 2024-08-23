@@ -33,6 +33,33 @@ class Strategy(enum.Enum):
     MYPY_DAEMON = "MYPY_DAEMON"
 
 
+class RunCleaner(Protocol):
+    """
+    Callable used to perform some cleanup action
+    """
+
+    def __call__(self) -> None: ...
+
+
+class RunCleaners(Protocol):
+    """
+    A collection of :protocol:`RunCleaner` objects
+    """
+
+    def add(self, unique_identifier: str, cleaner: RunCleaner, /) -> None:
+        """
+        Register a cleaner.
+
+        If a cleaner with this identifier has already been registered then it will
+        be overridden
+        """
+
+    def __iter__(self) -> Iterator[RunCleaner]:
+        """
+        Yield all the unique cleaners
+        """
+
+
 class RunOptions(Protocol[T_Scenario]):
     """
     Used to represent the options used to run a type checker. This is a mutable object
@@ -47,6 +74,7 @@ class RunOptions(Protocol[T_Scenario]):
     check_paths: MutableSequence[str]
     do_followup: bool
     environment_overrides: MutableMapping[str, str | None]
+    cleaners: RunCleaners
 
 
 class FileModifier(Protocol):
@@ -601,6 +629,12 @@ class ScenarioRunner(Protocol[T_Scenario]):
         The scenario under test
         """
 
+    @property
+    def cleaners(self) -> RunCleaners:
+        """
+        An object to register cleanup functions for the end of the run
+        """
+
     def run_and_check(self, make_expectations: ExpectationsMaker[T_Scenario]) -> None:
         """
         Used to do a run of a type checker and check against the provided expectations
@@ -723,5 +757,7 @@ if TYPE_CHECKING:
     P_RunResult = RunResult[P_Scenario]
     P_RunnerConfig = RunnerConfig
     P_ProgramRunner = ProgramRunner[P_Scenario]
+    P_RunCleaner = RunCleaner
+    P_RunCleaners = RunCleaners
 
     _FM: P_FileModifier = cast(P_ScenarioRunner, None).file_modification

@@ -48,11 +48,19 @@ def typing_scenario_runner(
     )
     request.node.user_properties.append(("typing_runner", runner))
 
-    runner.prepare_scenario()
+    runner.cleaners.add("scenario_runner::cleanup_scenario", runner.cleanup_scenario)
     try:
+        runner.prepare_scenario()
         yield runner
     finally:
-        runner.cleanup_scenario()
+        failures: list[Exception] = []
+        for cleaner in runner.cleaners:
+            try:
+                cleaner()
+            except Exception as exc:
+                failures.append(exc)
+
+        assert len(failures) == 0, failures
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:

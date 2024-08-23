@@ -1,5 +1,6 @@
 import contextlib
 import dataclasses
+import functools
 import importlib
 import io
 import os
@@ -28,6 +29,7 @@ class RunOptions(Generic[protocols.T_Scenario]):
     check_paths: MutableSequence[str]
     do_followup: bool
     environment_overrides: MutableMapping[str, str | None]
+    cleaners: protocols.RunCleaners
 
 
 class ExternalMypyRunner(Generic[protocols.T_Scenario]):
@@ -207,12 +209,24 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
     def __init__(self) -> None:
         super().__init__(mypy_name="mypy.dmypy")
 
+    def _cleanup(self, *, cwd: pathlib.Path) -> None:
+        completed = subprocess.run([*self._command, "status"], capture_output=True, cwd=cwd)
+        if completed.returncode == 0:
+            completed = subprocess.run([*self._command, "kill"], capture_output=True, cwd=cwd)
+            assert (
+                completed.returncode == 0
+            ), f"Failed to stop dmypy: {completed.returncode}\n{completed.stdout.decode()}\n{completed.stderr.decode()}"
+
     def run(
         self, options: protocols.RunOptions[protocols.T_Scenario]
     ) -> expectations.RunResult[protocols.T_Scenario]:
         """
         Run dmypy as an external process
         """
+        options.cleaners.add(
+            f"program_runner::dmypy::{options.cwd}",
+            functools.partial(self._cleanup, cwd=options.cwd),
+        )
         result = super().run(options)
         lines = result.stdout.strip().split("\n")
         if lines and lines[-1].startswith("Success: no issues found"):
