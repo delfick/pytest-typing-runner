@@ -32,7 +32,7 @@ class NoteSeverity:
         return self.display == other_display
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(frozen=True)
 class ErrorSeverity:
     """
     Represents an "error" severity with an error type
@@ -540,7 +540,7 @@ class AddErrors:
             notices: protocols.LineNotices, /
         ) -> Sequence[protocols.ProgramNotice | None]:
             return [
-                notices.generate_notice(severity=ErrorSeverity(error_type=error_type), msg=error)
+                notices.generate_notice(severity=ErrorSeverity(error_type), msg=error)
                 for error_type, error in self.errors
             ]
 

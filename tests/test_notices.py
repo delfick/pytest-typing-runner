@@ -37,22 +37,22 @@ class TestNoteSeverity:
         assert notices.NoteSeverity() == notices.NoteSeverity()
         assert notices.NoteSeverity() == OtherSeverity("note")
         assert notices.NoteSeverity() != OtherSeverity("other")
-        assert notices.NoteSeverity() != notices.ErrorSeverity(error_type="arg-type")
+        assert notices.NoteSeverity() != notices.ErrorSeverity("arg-type")
 
 
 class TestErrorSeverity:
     def test_it_displays_error_with_error_type(self) -> None:
-        assert notices.ErrorSeverity(error_type="arg-type").display == "error[arg-type]"
-        assert notices.ErrorSeverity(error_type="assignment").display == "error[assignment]"
+        assert notices.ErrorSeverity("arg-type").display == "error[arg-type]"
+        assert notices.ErrorSeverity("assignment").display == "error[assignment]"
 
     def test_it_is_ordable(self) -> None:
         sev_c = OtherSeverity("c")
         sev_a = OtherSeverity("a")
         sev_z = OtherSeverity("z")
         sev_o = OtherSeverity("o")
-        sev_e1 = notices.ErrorSeverity(error_type="misc")
-        sev_e2 = notices.ErrorSeverity(error_type="")
-        sev_e3 = notices.ErrorSeverity(error_type="arg-type")
+        sev_e1 = notices.ErrorSeverity("misc")
+        sev_e2 = notices.ErrorSeverity("")
+        sev_e3 = notices.ErrorSeverity("arg-type")
         original: Sequence[protocols.Severity] = [
             sev_c,
             sev_e1,
@@ -65,27 +65,23 @@ class TestErrorSeverity:
         assert sorted(original) == [sev_a, sev_c, sev_e2, sev_e3, sev_e1, sev_o, sev_z]
 
     def test_it_can_be_compared(self) -> None:
-        assert notices.ErrorSeverity(error_type="arg-type") == notices.ErrorSeverity(
-            error_type="arg-type"
-        )
-        assert notices.ErrorSeverity(error_type="arg-type") == OtherSeverity("error[arg-type]")
+        assert notices.ErrorSeverity("arg-type") == notices.ErrorSeverity("arg-type")
+        assert notices.ErrorSeverity("arg-type") == OtherSeverity("error[arg-type]")
 
-        assert notices.ErrorSeverity(error_type="assignment") != OtherSeverity("error[arg-type]")
-        assert notices.ErrorSeverity(error_type="assignment") != notices.ErrorSeverity(
-            error_type="arg-type"
-        )
+        assert notices.ErrorSeverity("assignment") != OtherSeverity("error[arg-type]")
+        assert notices.ErrorSeverity("assignment") != notices.ErrorSeverity("arg-type")
 
-        assert notices.ErrorSeverity(error_type="assignment") != OtherSeverity("other[assignment]")
+        assert notices.ErrorSeverity("assignment") != OtherSeverity("other[assignment]")
 
     def test_it_thinks_empty_error_type_is_wildcard(self) -> None:
-        assert notices.ErrorSeverity(error_type="") == OtherSeverity("error")
-        assert notices.ErrorSeverity(error_type="") == OtherSeverity("error[]")
-        assert notices.ErrorSeverity(error_type="") == notices.ErrorSeverity(error_type="")
-        assert notices.ErrorSeverity(error_type="") == OtherSeverity("error[arg-type]")
-        assert notices.ErrorSeverity(error_type="") == notices.ErrorSeverity(error_type="arg-type")
+        assert notices.ErrorSeverity("") == OtherSeverity("error")
+        assert notices.ErrorSeverity("") == OtherSeverity("error[]")
+        assert notices.ErrorSeverity("") == notices.ErrorSeverity("")
+        assert notices.ErrorSeverity("") == OtherSeverity("error[arg-type]")
+        assert notices.ErrorSeverity("") == notices.ErrorSeverity("arg-type")
 
-        assert notices.ErrorSeverity(error_type="") != OtherSeverity("other")
-        assert notices.ErrorSeverity(error_type="") != OtherSeverity("other[arg-type]")
+        assert notices.ErrorSeverity("") != OtherSeverity("other")
+        assert notices.ErrorSeverity("") != OtherSeverity("other[arg-type]")
 
 
 class TestProgramNotice:
@@ -110,11 +106,9 @@ class TestProgramNotice:
         )
 
         assert not notice.is_type_reveal
+        assert not notice.clone(severity=notices.ErrorSeverity("assignment")).is_type_reveal
         assert not notice.clone(
-            severity=notices.ErrorSeverity(error_type="assignment")
-        ).is_type_reveal
-        assert not notice.clone(
-            severity=notices.ErrorSeverity(error_type="assignment"),
+            severity=notices.ErrorSeverity("assignment"),
             msg=notices.ProgramNotice.reveal_msg("hello"),
         ).is_type_reveal
         assert not notice.clone(severity=notices.NoteSeverity(), msg="Revealed").is_type_reveal
@@ -141,7 +135,7 @@ class TestProgramNotice:
             msg="stuff",
         )
 
-        error_sev = notices.ErrorSeverity(error_type="arg-type")
+        error_sev = notices.ErrorSeverity("arg-type")
         assert notice.clone(severity=error_sev) == notices.ProgramNotice(
             location=tmp_path, line_number=20, col=2, severity=error_sev, msg="stuff"
         )
@@ -174,7 +168,7 @@ class TestProgramNotice:
         )
         assert notice.display() == "severity=note:: stuff"
         assert (
-            notice.clone(severity=notices.ErrorSeverity(error_type="arg-type")).display()
+            notice.clone(severity=notices.ErrorSeverity("arg-type")).display()
             == "severity=error[arg-type]:: stuff"
         )
 
@@ -188,7 +182,7 @@ class TestProgramNotice:
         )
         assert notice.display() == "col=10 severity=note:: stuff"
         assert (
-            notice.clone(severity=notices.ErrorSeverity(error_type="arg-type")).display()
+            notice.clone(severity=notices.ErrorSeverity("arg-type")).display()
             == "col=10 severity=error[arg-type]:: stuff"
         )
 
@@ -206,14 +200,14 @@ class TestProgramNotice:
             location=tmp_path,
             line_number=20,
             col=None,
-            severity=notices.ErrorSeverity(error_type="arg-type"),
+            severity=notices.ErrorSeverity("arg-type"),
             msg="c",
         )
         n5 = notices.ProgramNotice(
             location=tmp_path,
             line_number=10,
             col=None,
-            severity=notices.ErrorSeverity(error_type="var-annotated"),
+            severity=notices.ErrorSeverity("var-annotated"),
             msg="d",
         )
 
@@ -332,12 +326,10 @@ class TestLineNotices:
         assert n1.msg == "n1"
         assert n1.col is None
 
-        n2 = line_notices.generate_notice(
-            msg="n2", severity=notices.ErrorSeverity(error_type="arg-type")
-        )
+        n2 = line_notices.generate_notice(msg="n2", severity=notices.ErrorSeverity("arg-type"))
         assert n2.location == tmp_path
         assert n2.line_number == 2
-        assert n2.severity == notices.ErrorSeverity(error_type="arg-type")
+        assert n2.severity == notices.ErrorSeverity("arg-type")
         assert n2.msg == "n2"
         assert n2.col is None
 

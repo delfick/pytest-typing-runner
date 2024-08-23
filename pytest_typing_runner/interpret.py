@@ -133,7 +133,7 @@ def parse_notices_from_file(file_notices: protocols.FileNotices, /) -> protocols
                 change=notice_changers.AppendToLine(
                     notices_maker=lambda line_notices: [
                         line_notices.generate_notice(
-                            severity=notices.ErrorSeverity(error_type=error_type), msg=rest
+                            severity=notices.ErrorSeverity(error_type), msg=rest
                         )
                     ]
                 ),
@@ -204,7 +204,7 @@ def interpret_mypy_output(
 
         severity: protocols.Severity
         if match.severity == "error":
-            severity = notices.ErrorSeverity(error_type=match.tag)
+            severity = notices.ErrorSeverity(match.tag)
         elif match.severity == "note":
             severity = notices.NoteSeverity()
         else:
