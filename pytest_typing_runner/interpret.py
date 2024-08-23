@@ -143,10 +143,7 @@ def parse_notices_from_file(file_notices: protocols.FileNotices, /) -> protocols
                 previous_code_line_number,
                 change=notice_changers.ModifyLatestMatch(
                     must_exist=False,
-                    matcher=lambda notice: (
-                        notice.severity == notices.NoteSeverity()
-                        and not notice.msg.startswith("Revealed type is")
-                    ),
+                    matcher=lambda notice: not notice.is_type_reveal,
                     change=lambda notice: notice.clone(
                         severity=notices.NoteSeverity(), msg=f"{notice.msg}\n{rest}"
                     ),

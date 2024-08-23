@@ -102,6 +102,30 @@ class TestProgramNotice:
     def test_it_has_classmethod_for_getting_reveal_msg(self) -> None:
         assert notices.ProgramNotice.reveal_msg("things") == 'Revealed type is "things"'
 
+    def test_it_has_ability_to_know_if_notice_is_a_type_reveal(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        notice = notices.ProgramNotice(
+            location=tmp_path, line_number=10, severity=notices.NoteSeverity(), msg="", col=None
+        )
+
+        assert not notice.is_type_reveal
+        assert not notice.clone(
+            severity=notices.ErrorSeverity(error_type="assignment")
+        ).is_type_reveal
+        assert not notice.clone(
+            severity=notices.ErrorSeverity(error_type="assignment"),
+            msg=notices.ProgramNotice.reveal_msg("hello"),
+        ).is_type_reveal
+        assert not notice.clone(severity=notices.NoteSeverity(), msg="Revealed").is_type_reveal
+
+        assert notice.clone(
+            severity=notices.NoteSeverity(), msg='Revealed type is "hello"'
+        ).is_type_reveal
+        assert notice.clone(
+            severity=notices.NoteSeverity(), msg=notices.ProgramNotice.reveal_msg("hi")
+        ).is_type_reveal
+
     def test_it_can_clone(self, tmp_path: pathlib.Path) -> None:
         notice = notices.ProgramNotice(
             location=tmp_path, line_number=20, col=2, severity=notices.NoteSeverity(), msg="stuff"

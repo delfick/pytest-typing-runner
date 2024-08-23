@@ -110,6 +110,13 @@ class ProgramNotice:
         """
         return f'Revealed type is "{revealed}"'
 
+    @property
+    def is_type_reveal(self) -> bool:
+        """
+        Returns whether this notice represents output from a `reveal_type(...)` instruction
+        """
+        return self.severity == NoteSeverity() and self.msg.startswith('Revealed type is "')
+
     def clone(self, **kwargs: Unpack[protocols.ProgramNoticeCloneKwargs]) -> Self:
         """
         Return a copy of this notice with certain values replaced.
@@ -511,17 +518,7 @@ class AddRevealedTypes:
         def change(notices: protocols.LineNotices, /) -> protocols.LineNotices | None:
             if self.replace:
                 notices = notices.set_notices(
-                    [
-                        (
-                            None
-                            if (
-                                notice.severity == NoteSeverity()
-                                and notice.msg.startswith("Revealed type is")
-                            )
-                            else notice
-                        )
-                        for notice in notices
-                    ],
+                    [(None if notice.is_type_reveal else notice) for notice in notices],
                     allow_empty=True,
                 )
 
@@ -583,7 +580,7 @@ class AddNotes:
                 replaced: list[protocols.ProgramNotice | None] = []
                 for notice in notices:
                     if notice.severity == NoteSeverity():
-                        if self.keep_reveals and notice.msg.startswith("Revealed type is"):
+                        if self.keep_reveals and notice.is_type_reveal:
                             replaced.append(notice)
                     else:
                         replaced.append(notice)
@@ -606,7 +603,7 @@ class RemoveFromRevealedType:
         def change(notices: protocols.LineNotices, /) -> protocols.LineNotices | None:
             replaced: list[protocols.ProgramNotice | None] = []
             for notice in notices:
-                if notice.severity == NoteSeverity() and notice.msg.startswith("Revealed type is"):
+                if notice.is_type_reveal:
                     notice = notice.clone(msg=notice.msg.replace(self.remove, ""))
                 replaced.append(notice)
 

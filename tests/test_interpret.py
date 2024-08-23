@@ -70,7 +70,7 @@ class TestParseNotices:
                             line_number=3,
                             col=None,
                             severity=notices.NoteSeverity(),
-                            msg='Revealed type is "type[leader.models.Leader]"',
+                            msg=notices.ProgramNotice.reveal_msg("type[leader.models.Leader]"),
                         )
                     ],
                 ),
@@ -83,7 +83,9 @@ class TestParseNotices:
                             line_number=11,
                             col=None,
                             severity=notices.NoteSeverity(),
-                            msg='Revealed type is "Union[type[simple.models.Follow1], type[simple.models.Follow2]]"',
+                            msg=notices.ProgramNotice.reveal_msg(
+                                "Union[type[simple.models.Follow1], type[simple.models.Follow2]]"
+                            ),
                         )
                     ],
                 ),
@@ -96,7 +98,9 @@ class TestParseNotices:
                             line_number=14,
                             col=None,
                             severity=notices.NoteSeverity(),
-                            msg='Revealed type is "Union[type[simple.models.Follow1], type[simple.models.Follow2]]"',
+                            msg=notices.ProgramNotice.reveal_msg(
+                                "Union[type[simple.models.Follow1], type[simple.models.Follow2]]"
+                            ),
                         )
                     ],
                 ),
@@ -109,7 +113,9 @@ class TestParseNotices:
                             line_number=18,
                             col=None,
                             severity=notices.NoteSeverity(),
-                            msg='Revealed type is "Union[type[simple.models.Follow1], type[simple.models.Follow2]]"',
+                            msg=notices.ProgramNotice.reveal_msg(
+                                "Union[type[simple.models.Follow1], type[simple.models.Follow2]]"
+                            ),
                         )
                     ],
                 ),
@@ -122,7 +128,9 @@ class TestParseNotices:
                             line_number=23,
                             col=None,
                             severity=notices.NoteSeverity(),
-                            msg='Revealed type is "Union[type[simple.models.Follow1], type[simple.models.Follow2]]"',
+                            msg=notices.ProgramNotice.reveal_msg(
+                                "Union[type[simple.models.Follow1], type[simple.models.Follow2]]"
+                            ),
                         )
                     ],
                 ),

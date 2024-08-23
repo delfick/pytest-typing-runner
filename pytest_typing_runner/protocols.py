@@ -353,6 +353,12 @@ class ProgramNotice(Protocol):
         The message attached to the notice, dedented and including newlines
         """
 
+    @property
+    def is_type_reveal(self) -> bool:
+        """
+        Returns whether this notice represents output from a `reveal_type(...)` instruction
+        """
+
     def clone(self, **kwargs: Unpack[ProgramNoticeCloneKwargs]) -> Self:
         """
         Return a clone with specific changes
