@@ -75,8 +75,8 @@ class TestAppendToLine:
     def test_it_can_create_a_clone_with_no_new_notices(
         self, line_notices: protocols.LineNotices
     ) -> None:
-        n1 = line_notices.generate_notice()
-        n2 = line_notices.generate_notice()
+        n1 = line_notices.generate_notice(msg="n1")
+        n2 = line_notices.generate_notice(msg="n2")
 
         line_notices = line_notices.set_notices([n1, n2], allow_empty=True)
         assert list(line_notices) == [n1, n2]
@@ -98,11 +98,11 @@ class TestAppendToLine:
         assert list(line_notices) == [n1, n2]
 
     def test_it_can_append_to_the_notices(self, line_notices: protocols.LineNotices) -> None:
-        n1 = line_notices.generate_notice()
-        n2 = line_notices.generate_notice()
-        n3 = line_notices.generate_notice()
-        n4 = line_notices.generate_notice()
-        n5 = line_notices.generate_notice()
+        n1 = line_notices.generate_notice(msg="n1")
+        n2 = line_notices.generate_notice(msg="n2")
+        n3 = line_notices.generate_notice(msg="n3")
+        n4 = line_notices.generate_notice(msg="n4")
+        n5 = line_notices.generate_notice(msg="n5")
 
         line_notices = line_notices.set_notices([n1, n2], allow_empty=True)
         assert list(line_notices) == [n1, n2]

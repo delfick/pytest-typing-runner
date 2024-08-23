@@ -213,7 +213,7 @@ class LineNotices:
         return dataclasses.replace(self, notices=replacement)
 
     def generate_notice(
-        self, *, severity: protocols.Severity | None = None, msg: str = "", col: int | None = None
+        self, *, msg: str, severity: protocols.Severity | None = None, col: int | None = None
     ) -> protocols.ProgramNotice:
         """
         Return an object that satisfies :protocol:`pytest_typing_runner.protocols.ProgramNotice`

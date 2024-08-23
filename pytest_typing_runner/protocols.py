@@ -441,7 +441,7 @@ class LineNotices(Protocol):
         """
 
     def generate_notice(
-        self, *, severity: Severity | None = None, msg: str = "", col: int | None = None
+        self, *, msg: str, severity: Severity | None = None, col: int | None = None
     ) -> ProgramNotice:
         """
         Generate a notice for this location and line

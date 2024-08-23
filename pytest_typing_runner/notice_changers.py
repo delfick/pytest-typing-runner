@@ -181,7 +181,7 @@ class ModifyLatestMatch:
         if not found:
             if self.must_exist:
                 raise MissingNotices(line_number=notices.line_number, location=notices.location)
-            replaced.append(self.change(notices.generate_notice()))
+            replaced.append(self.change(notices.generate_notice(msg="")))
 
         # mypy is silly and the overload on set_notices means the bool needs to be manually split
         if self.allow_empty:

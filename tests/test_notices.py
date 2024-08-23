@@ -243,8 +243,8 @@ class TestLineNotices:
         )
         assert line_notices is not None
         assert not line_notices.has_notices
-        n1 = line_notices.generate_notice()
-        n2 = line_notices.generate_notice()
+        n1 = line_notices.generate_notice(msg="n1")
+        n2 = line_notices.generate_notice(msg="n2")
         assert not line_notices.has_notices
 
         copy = line_notices.set_notices([n1, n2])
@@ -261,8 +261,8 @@ class TestLineNotices:
         )
         assert line_notices is not None
         assert not line_notices.has_notices
-        n1 = line_notices.generate_notice()
-        n2 = line_notices.generate_notice()
+        n1 = line_notices.generate_notice(msg="n1")
+        n2 = line_notices.generate_notice(msg="n2")
         assert not line_notices.has_notices
 
         line_notices = line_notices.set_notices([n1, n2])
@@ -281,8 +281,8 @@ class TestLineNotices:
         )
         assert line_notices is not None
         assert not line_notices.has_notices
-        n1 = line_notices.generate_notice()
-        n2 = line_notices.generate_notice()
+        n1 = line_notices.generate_notice(msg="n1")
+        n2 = line_notices.generate_notice(msg="n2")
         assert not line_notices.has_notices
 
         line_notices = line_notices.set_notices([n1, n2])
@@ -301,18 +301,20 @@ class TestLineNotices:
     def test_it_can_generate_a_program_notice(self, tmp_path: pathlib.Path) -> None:
         line_notices = notices.LineNotices(location=tmp_path, line_number=2)
 
-        n1 = line_notices.generate_notice()
+        n1 = line_notices.generate_notice(msg="n1")
         assert n1.location == tmp_path
         assert n1.line_number == 2
         assert n1.severity == notices.NoteSeverity()
-        assert n1.msg == ""
+        assert n1.msg == "n1"
         assert n1.col is None
 
-        n2 = line_notices.generate_notice(severity=notices.ErrorSeverity(error_type="arg-type"))
+        n2 = line_notices.generate_notice(
+            msg="n2", severity=notices.ErrorSeverity(error_type="arg-type")
+        )
         assert n2.location == tmp_path
         assert n2.line_number == 2
         assert n2.severity == notices.ErrorSeverity(error_type="arg-type")
-        assert n2.msg == ""
+        assert n2.msg == "n2"
         assert n2.col is None
 
         n3 = line_notices.generate_notice(msg="other")
@@ -334,13 +336,13 @@ class TestFileNotices:
         file_notices = notices.FileNotices(location=tmp_path)
 
         ln1 = file_notices.generate_notices_for_line(2)
-        n1 = ln1.generate_notice()
-        n2 = ln1.generate_notice()
+        n1 = ln1.generate_notice(msg="n1")
+        n2 = ln1.generate_notice(msg="n2")
         ln1 = ln1.set_notices([n1, n2], allow_empty=True)
 
         ln2 = file_notices.generate_notices_for_line(3)
-        n3 = ln2.generate_notice()
-        n4 = ln2.generate_notice()
+        n3 = ln2.generate_notice(msg="n3")
+        n4 = ln2.generate_notice(msg="n4")
         ln2 = ln2.set_notices([n3, n4], allow_empty=True)
 
         copy = file_notices.set_lines({2: ln1, 3: ln2})
@@ -353,13 +355,13 @@ class TestFileNotices:
         file_notices = notices.FileNotices(location=tmp_path)
 
         ln1 = file_notices.generate_notices_for_line(2)
-        n1 = ln1.generate_notice()
-        n2 = ln1.generate_notice()
+        n1 = ln1.generate_notice(msg="n1")
+        n2 = ln1.generate_notice(msg="n2")
         ln1 = ln1.set_notices([n1, n2], allow_empty=True)
 
         ln2 = file_notices.generate_notices_for_line(3)
-        n3 = ln2.generate_notice()
-        n4 = ln2.generate_notice()
+        n3 = ln2.generate_notice(msg="n3")
+        n4 = ln2.generate_notice(msg="n4")
         ln2 = ln2.set_notices([n3, n4], allow_empty=True)
 
         file_notices = file_notices.set_lines({2: ln1, 3: ln2})
@@ -381,13 +383,13 @@ class TestFileNotices:
         file_notices = notices.FileNotices(location=tmp_path).set_name("one", 2).set_name("two", 3)
 
         ln1 = file_notices.generate_notices_for_line(2)
-        n1 = ln1.generate_notice()
-        n2 = ln1.generate_notice()
+        n1 = ln1.generate_notice(msg="n1")
+        n2 = ln1.generate_notice(msg="n2")
         ln1 = ln1.set_notices([n1, n2], allow_empty=True)
 
         ln2 = file_notices.generate_notices_for_line(3)
-        n3 = ln2.generate_notice()
-        n4 = ln2.generate_notice()
+        n3 = ln2.generate_notice(msg="n3")
+        n4 = ln2.generate_notice(msg="n4")
         ln2 = ln2.set_notices([n3, n4], allow_empty=True)
 
         assert file_notices.get_line_number("one") == 2
@@ -425,24 +427,24 @@ class TestDiffFileNotices:
     def test_it_yields_sorted_by_line_number(self, tmp_path: pathlib.Path) -> None:
         file_notices = notices.FileNotices(location=tmp_path)
         ln1 = file_notices.generate_notices_for_line(1)
-        na1 = ln1.generate_notice()
-        nb1 = ln1.generate_notice()
+        na1 = ln1.generate_notice(msg="na1")
+        nb1 = ln1.generate_notice(msg="nb1")
 
         ln2 = file_notices.generate_notices_for_line(2)
-        na2 = ln2.generate_notice()
-        nb2 = ln2.generate_notice()
-        na3 = ln2.generate_notice()
-        nb3 = ln2.generate_notice()
+        na2 = ln2.generate_notice(msg="na2")
+        nb2 = ln2.generate_notice(msg="nb2")
+        na3 = ln2.generate_notice(msg="na3")
+        nb3 = ln2.generate_notice(msg="nb3")
 
         ln3 = file_notices.generate_notices_for_line(3)
-        na4 = ln3.generate_notice()
-        nb4 = ln3.generate_notice()
-        na5 = ln3.generate_notice()
-        nb5 = ln3.generate_notice()
+        na4 = ln3.generate_notice(msg="na4")
+        nb4 = ln3.generate_notice(msg="nb4")
+        na5 = ln3.generate_notice(msg="na5")
+        nb5 = ln3.generate_notice(msg="nb5")
 
         ln4 = file_notices.generate_notices_for_line(4)
-        na6 = ln4.generate_notice()
-        nb6 = ln4.generate_notice()
+        na6 = ln4.generate_notice(msg="na6")
+        nb6 = ln4.generate_notice(msg="nb6")
 
         diff_file_notices = notices.DiffFileNotices(
             by_line_number={
@@ -504,17 +506,17 @@ class TestProgramNotices:
 
         fn1 = program_notices.generate_notices_for_location(tmp_path / "one")
         f1l1 = fn1.generate_notices_for_line(1)
-        n1 = f1l1.generate_notice()
-        n2 = f1l1.generate_notice()
+        n1 = f1l1.generate_notice(msg="n1")
+        n2 = f1l1.generate_notice(msg="n2")
         fn1 = fn1.set_lines({1: f1l1.set_notices([n1, n2])})
 
         fn2 = program_notices.generate_notices_for_location(tmp_path / "two")
         f2l1 = fn2.generate_notices_for_line(1)
-        n3 = f2l1.generate_notice()
-        n4 = f2l1.generate_notice()
+        n3 = f2l1.generate_notice(msg="n3")
+        n4 = f2l1.generate_notice(msg="n4")
         f2l5 = fn2.generate_notices_for_line(5)
-        n5 = f2l5.generate_notice()
-        n6 = f2l5.generate_notice()
+        n5 = f2l5.generate_notice(msg="n5")
+        n6 = f2l5.generate_notice(msg="n6")
         fn2 = fn2.set_lines({1: f2l1.set_notices([n3, n4]), 5: f2l5.set_notices([n5, n6])})
 
         assert not program_notices.has_notices
@@ -538,7 +540,7 @@ class TestProgramNotices:
 
         fn3 = program_notices.generate_notices_for_location(tmp_path / "four")
         f3l1 = fn3.generate_notices_for_line(1)
-        n7 = f3l1.generate_notice()
+        n7 = f3l1.generate_notice(msg="n7")
         fn3 = fn3.set_lines({1: f3l1.set_notices([n7])})
 
         copy = copy.set_files({fn3.location: fn3})
