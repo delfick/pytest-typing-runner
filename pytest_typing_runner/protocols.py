@@ -625,6 +625,11 @@ class Scenario(Protocol):
         Called to check the result against expectations
         """
 
+    def generate_program_notices(self) -> ProgramNotices:
+        """
+        Return an object that satisfies an empty :protocol:`ProgramNotices`
+        """
+
 
 class ScenarioRunner(Protocol[T_Scenario]):
     """

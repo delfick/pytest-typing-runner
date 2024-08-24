@@ -181,6 +181,9 @@ class Scenario:
     def parse_notices_from_file(self, location: pathlib.Path) -> protocols.FileNotices:
         return interpret.parse_notices_from_file(notices.FileNotices(location=location))
 
+    def generate_program_notices(self) -> protocols.ProgramNotices:
+        return notices.ProgramNotices()
+
 
 class ScenarioRunner(Generic[protocols.T_Scenario]):
     def __init__(
