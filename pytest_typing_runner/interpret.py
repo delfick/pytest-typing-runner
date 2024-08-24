@@ -2,7 +2,7 @@ import dataclasses
 import enum
 import pathlib
 import re
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, ClassVar
 
 from typing_extensions import Self, assert_never
@@ -158,15 +158,6 @@ class MypyOutput:
         )
 
         @classmethod
-        def match_lines(cls, lines: Sequence[str]) -> Iterator[Self]:
-            for line in lines:
-                m = cls.match(line)
-                if m is None:
-                    raise ValueError(f"Expected mypy output to be valid, got '{line}'")
-
-                yield m
-
-        @classmethod
         def match(cls, line: str, /) -> Self | None:
             m = cls.mypy_output_line_regex.match(line.strip())
             if m is None:
@@ -204,7 +195,11 @@ class MypyOutput:
     ) -> protocols.ProgramNotices:
         program_notices = into
 
-        for match in cls._LineMatch.match_lines(lines):
+        for line in lines:
+            match = cls._LineMatch.match(line)
+            if match is None:
+                raise ValueError(f"Expected mypy output to be valid, got '{line}'")
+
             program_notices = notice_changers.ModifyFile(
                 location=root_dir / match.filename,
                 must_exist=False,
