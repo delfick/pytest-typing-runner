@@ -1,18 +1,17 @@
 import dataclasses
 import enum
 import importlib
+import pathlib
 import re
 import textwrap
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from typing import ClassVar
 
-from typing_extensions import assert_never
+from typing_extensions import Self, assert_never
 
 from . import notice_changers, notices, protocols
 
 regexes = {
-    "mypy_output_line": re.compile(
-        r"^(?P<filename>[^:]+):(?P<line_number>\d+)(:(?P<col>\d+))?: (?P<severity>[^:]+): (?P<msg>.+?)(\s+\[(?P<tag>[^\]]+)\])?$"
-    ),
     "potential_instruction": re.compile(r"^\s*#\s*\^"),
     "instruction": re.compile(
         # ^ INSTR >>
@@ -158,70 +157,91 @@ def parse_notices_from_file(file_notices: protocols.FileNotices, /) -> protocols
     return file_notices
 
 
-def normalise_mypy_msg(msg: str) -> str:
-    msg = "\n".join(line for line in msg.split("\n") if not line.startswith(":debug:"))
+class MypyOutput:
+    @dataclasses.dataclass(frozen=True, kw_only=True)
+    class _LineMatch:
+        filename: str
+        line_number: int
+        col: int | None
+        severity: protocols.Severity
+        msg: str
 
-    if importlib.metadata.version("mypy") == "1.4.0":
-        return (
-            msg.replace("type[", "Type[")
-            .replace("django.db.models.query.QuerySet", "django.db.models.query._QuerySet")
-            .replace("Type[Concrete?", "type[Concrete?")
+        mypy_output_line_regex: ClassVar[re.Pattern[str]] = re.compile(
+            r"^(?P<filename>[^:]+):(?P<line_number>\d+)(:(?P<col>\d+))?: (?P<severity>[^:]+): (?P<msg>.+?)(\s+\[(?P<tag>[^\]]+)\])?$"
         )
-    else:
-        return msg
 
+        @classmethod
+        def match_lines(cls, lines: Sequence[str]) -> Iterator[Self]:
+            for line in lines:
+                m = cls.match(line)
+                if m is None:
+                    raise ValueError(f"Expected mypy output to be valid, got '{line}'")
 
-def interpret_mypy_output(
-    scenario: protocols.T_Scenario,
-    options: protocols.RunOptions[protocols.T_Scenario],
-    lines: Sequence[str],
-    program_notices: protocols.ProgramNotices | None = None,
-) -> protocols.ProgramNotices:
-    if program_notices is None:
-        program_notices = notices.ProgramNotices()
+                yield m
 
-    matches: list[_MypyOutputLineMatch] = []
+        @classmethod
+        def match(cls, line: str, /) -> Self | None:
+            m = cls.mypy_output_line_regex.match(line.strip())
+            if m is None:
+                return None
 
-    for line in lines:
-        m = regexes["mypy_output_line"].match(line.strip())
-        if m is None:
-            raise ValueError(f"Expected mypy output to be valid, got '{line}'")
+            groups = m.groupdict()
+            tag = "" if not groups["tag"] else groups["tag"].strip()
+            severity_match = groups["severity"]
 
-        groups = m.groupdict()
-        matches.append(
-            _MypyOutputLineMatch(
+            severity: protocols.Severity
+            if severity_match == "error":
+                severity = notices.ErrorSeverity(tag)
+            elif severity_match == "note":
+                severity = notices.NoteSeverity()
+            else:
+                raise ValueError(f"Unknown severity: {severity_match}")
+
+            return cls(
                 filename=groups["filename"],
                 line_number=int(groups["line_number"]),
                 col=None if not (col := groups["col"]) else int(col),
-                severity=groups["severity"],
-                msg=normalise_mypy_msg(groups["msg"]).strip(),
-                tag="" if not groups["tag"] else groups["tag"].strip(),
+                severity=severity,
+                msg=cls._normalise_mypy_msg(groups["msg"]).strip(),
             )
-        )
 
-    for match in matches:
-        location = options.cwd / match.filename
+        @classmethod
+        def _normalise_mypy_msg(cls, msg: str) -> str:
+            msg = "\n".join(line for line in msg.split("\n") if not line.startswith(":debug:"))
 
-        severity: protocols.Severity
-        if match.severity == "error":
-            severity = notices.ErrorSeverity(match.tag)
-        elif match.severity == "note":
-            severity = notices.NoteSeverity()
-        else:
-            raise ValueError(f"Unknown severity: {match.severity}")
+            if importlib.metadata.version("mypy") == "1.4.0":
+                return (
+                    msg.replace("type[", "Type[")
+                    .replace("django.db.models.query.QuerySet", "django.db.models.query._QuerySet")
+                    .replace("Type[Concrete?", "type[Concrete?")
+                )
+            else:
+                return msg
 
-        program_notices = notice_changers.ModifyFile(
-            location=location,
-            must_exist=False,
-            change=notice_changers.ModifyLine(
-                name_or_line=match.line_number,
-                line_must_exist=False,
-                change=notice_changers.AppendToLine(
-                    notices_maker=lambda line_notices: [
-                        line_notices.generate_notice(severity=severity, msg=match.msg)
-                    ]
+    @classmethod
+    def parse(
+        cls,
+        lines: Sequence[str],
+        /,
+        *,
+        into: protocols.ProgramNotices,
+        root_dir: pathlib.Path,
+    ) -> protocols.ProgramNotices:
+        program_notices = into
+
+        for match in cls._LineMatch.match_lines(lines):
+            program_notices = notice_changers.ModifyFile(
+                location=root_dir / match.filename,
+                must_exist=False,
+                change=notice_changers.ModifyLine(
+                    name_or_line=match.line_number,
+                    line_must_exist=False,
+                    change=notice_changers.AppendToLine(
+                        notices_maker=lambda line_notices: [
+                            line_notices.generate_notice(severity=match.severity, msg=match.msg)
+                        ]
+                    ),
                 ),
-            ),
-        )(program_notices)
+            )(program_notices)
 
-    return program_notices
+        return program_notices

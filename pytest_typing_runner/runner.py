@@ -76,7 +76,11 @@ class ExternalMypyRunner(Generic[protocols.T_Scenario]):
         if lines[-1].startswith("Success: no issues"):
             lines.pop()
 
-        got = interpret.interpret_mypy_output(result.options.scenario, result.options, lines)
+        got = interpret.MypyOutput.parse(
+            lines,
+            into=result.options.scenario.generate_program_notices(),
+            root_dir=result.options.cwd,
+        )
         expectations.compare_notices(
             got.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
         )
@@ -196,7 +200,11 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
         if lines[-1].startswith("Success: no issues"):
             lines.pop()
 
-        got = interpret.interpret_mypy_output(result.options.scenario, result.options, lines)
+        got = interpret.MypyOutput.parse(
+            lines,
+            into=result.options.scenario.generate_program_notices(),
+            root_dir=result.options.cwd,
+        )
         expectations.compare_notices(
             got.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
         )
@@ -261,7 +269,11 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
         if lines and lines[0] == "Daemon started":
             lines.pop(0)
 
-        got = interpret.interpret_mypy_output(result.options.scenario, result.options, lines)
+        got = interpret.MypyOutput.parse(
+            lines,
+            into=result.options.scenario.generate_program_notices(),
+            root_dir=result.options.cwd,
+        )
         expectations.compare_notices(
             got.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
         )
