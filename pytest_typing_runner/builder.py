@@ -29,17 +29,24 @@ class ScenarioFile:
     )
 
     def set(self, content: str | None) -> Self:
+        parser = self.file_parser
+        if None in self._file_parser_override:
+            parser = self._file_parser_override[None]
+
+        if content is not None:
+            content, _ = parser(
+                content, into=notices.FileNotices(location=self.root_dir / self.path)
+            )
+
         self.file_modification(path=self.path, content=content)
         return self
 
     def append(self, content: str, *, divider: str = "\n", must_exist: bool = True) -> Self:
-        self.file_modification(
-            path=self.path,
+        return self.set(
             content=file_changer.FileAppender(
                 root_dir=self.root_dir, path=self.path, extra_content=content
             ).after_append(divider=divider, must_exist=must_exist),
         )
-        return self
 
     def expect(self, *instructions: protocols.FileNoticesChanger) -> Self:
         for instruction in instructions:
@@ -53,16 +60,23 @@ class ScenarioFile:
             self._file_parser_override[None] = parser
         return self
 
-    def notices(self) -> protocols.FileNotices | None:
+    def notices(self, *, into: protocols.FileNotices) -> protocols.FileNotices | None:
         parser = self.file_parser
+        file_notices = into
         if None in self._file_parser_override:
             parser = self._file_parser_override[None]
 
-        file_notices = parser(location=self.root_dir / self.path)
+        location = self.root_dir / self.path
+        original = location.read_text()
+        replacement, file_notices = parser(original, into=file_notices)
+        assert (
+            replacement == original
+        ), "Contents of {self.path} were not transformed when written to disk"
+
         for instruction in self._overrides:
             changed = instruction(file_notices)
             if changed is None:
-                file_notices = notices.FileNotices(location=file_notices.location)
+                file_notices = into.clear(clear_names=True)
             else:
                 file_notices = changed
 
@@ -118,13 +132,17 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
         if change_expectations is not None:
             change_expectations()
 
+        program_notices = scenario_runner.scenario.generate_program_notices()
+
         return expectations.Expectations(
             options=options,
             expect_fail=scenario_runner.scenario.expect_fail,
             expect_stderr="",
-            expect_notices=notices.ProgramNotices().set_files(
+            expect_notices=program_notices.set_files(
                 {
-                    scenario_runner.scenario.root_dir / path: known.notices()
+                    (location := scenario_runner.scenario.root_dir / path): known.notices(
+                        into=program_notices.generate_notices_for_location(location)
+                    )
                     for path, known in self._known_files.items()
                 }
             ),

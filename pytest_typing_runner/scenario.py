@@ -178,8 +178,10 @@ class Scenario:
         """
         expectations.check_results(result=result)
 
-    def parse_notices_from_file(self, location: pathlib.Path) -> protocols.FileNotices:
-        return interpret.parse_notices_from_file(notices.FileNotices(location=location))
+    def parse_notices_from_file(
+        self, content: str, /, *, into: protocols.FileNotices
+    ) -> tuple[str, protocols.FileNotices]:
+        return interpret.FileContent.parse(textwrap.dedent(content), into=into)
 
     def generate_program_notices(self) -> protocols.ProgramNotices:
         return notices.ProgramNotices()
@@ -339,3 +341,4 @@ if TYPE_CHECKING:
     _CSRU: protocols.ScenarioRunner[C_Scenario] = cast(C_ScenarioRunner, None)
 
     _RCS: protocols.RunCleaners = cast(RunCleaners, None)
+    _PNFF: protocols.FileNoticesParser = cast(C_Scenario, None).parse_notices_from_file

@@ -521,7 +521,7 @@ class FileNoticesParser(Protocol):
     Used to parse notices from comments in a file
     """
 
-    def __call__(self, location: pathlib.Path) -> FileNotices: ...
+    def __call__(self, content: str, /, *, into: FileNotices) -> tuple[str, FileNotices]: ...
 
 
 class ProgramNotices(Protocol):
@@ -613,9 +613,11 @@ class Scenario(Protocol):
         Called to use the run options to run a type checker and get a result
         """
 
-    def parse_notices_from_file(self, location: pathlib.Path) -> FileNotices:
+    def parse_notices_from_file(
+        self, content: str, /, *, into: FileNotices
+    ) -> tuple[str, FileNotices]:
         """
-        Used to find comments in a file that represent expected notices
+        Used to transform and parse content for any expected notices in the comments
         """
 
     def check_results(
@@ -730,7 +732,7 @@ class ScenarioFile(Protocol):
         The path to this file relative to the rootdir
         """
 
-    def notices(self) -> FileNotices | None:
+    def notices(self, *, into: FileNotices) -> FileNotices | None:
         """
         Return the notices associated with this file
         """
@@ -779,3 +781,4 @@ if TYPE_CHECKING:
     P_RunCleaners = RunCleaners
 
     _FM: P_FileModifier = cast(P_ScenarioRunner, None).file_modification
+    _PNFF: FileNoticesParser = cast(Scenario, None).parse_notices_from_file

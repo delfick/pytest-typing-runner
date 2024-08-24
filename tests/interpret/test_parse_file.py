@@ -29,8 +29,8 @@ class TestParseNotices:
             # ^ REVEAL[five] ^ Union[type[simple.models.Follow1], type[simple.models.Follow2]]
         """)
 
-        location = tmp_path / "fle.py"
-        location.write_text(original)
+        path = "fle.py"
+        location = tmp_path / path
 
         transformed = textwrap.dedent("""
         model: type[Leader] = Follow1
@@ -138,11 +138,13 @@ class TestParseNotices:
             name_to_line_number={"one": 3, "two": 11, "three": 14, "four": 18, "five": 23},
         )
 
-        parsed = interpret.parse_notices_from_file(notices.FileNotices(location=location))
-        assert location.read_text() == transformed
+        replaced, parsed = interpret.FileContent.parse(
+            original, into=notices.FileNotices(location=location)
+        )
+        assert replaced == transformed
         assert parsed == expected
 
         # And can run again with no further changes
-        parsed = interpret.parse_notices_from_file(notices.FileNotices(location=location))
-        assert location.read_text() == transformed
+        replaced, parsed = interpret.FileContent.parse(replaced, into=parsed)
+        assert replaced == transformed
         assert parsed == expected
