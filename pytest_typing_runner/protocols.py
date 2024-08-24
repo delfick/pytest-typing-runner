@@ -508,6 +508,13 @@ class FileNotices(Protocol):
         Any None values will result in that line number being removed
         """
 
+    def clear(self, *, clear_names: bool) -> Self:
+        """
+        Return a modified file notices with all notices removed
+
+        :param clear_names: Whether to clear names as well
+        """
+
 
 class FileNoticesParser(Protocol):
     """

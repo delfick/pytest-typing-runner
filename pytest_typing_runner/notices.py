@@ -341,6 +341,16 @@ class FileNotices:
 
         return dataclasses.replace(self, by_line_number=replacement)
 
+    def clear(self, *, clear_names: bool) -> Self:
+        """
+        Return a modified file notices with all notices removed
+        """
+        return dataclasses.replace(
+            self,
+            by_line_number={},
+            name_to_line_number={} if clear_names else dict(self.name_to_line_number),
+        )
+
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class DiffFileNotices:
