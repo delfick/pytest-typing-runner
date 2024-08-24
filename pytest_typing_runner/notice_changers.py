@@ -58,12 +58,21 @@ class FirstMatchOnly:
     :param change:
         A function that takes in a program notice and returns either ``None`` if
         the notice should be removed, or a program notice to replace it.
+
+    .. automethod:: __call__
     """
 
     change: protocols.ProgramNoticeChanger
     found: MutableMapping[None, None] = dataclasses.field(init=False, default_factory=dict)
 
     def __call__(self, notice: protocols.ProgramNotice, /) -> protocols.ProgramNotice | None:
+        """
+        Perform the transformation
+
+        :param notice: The notice to change
+        :returns:
+            Clone of the program notice with changes, or None if the notice should be deleted
+        """
         if None in self.found:
             return notice
 
@@ -95,14 +104,21 @@ class AppendToLine:
         Callable that takes the line notices being changed and returns a sequence
         of program notice objects to add to that line notices. Any ``None`` values
         in the sequence will be ignored.
-    :returns:
-        A copy of the passed in notices with the additional notices appended.
-        This changer never returns ``None``.
+
+    .. automethod:: __call__
     """
 
     notices_maker: Callable[[protocols.LineNotices], Sequence[protocols.ProgramNotice | None]]
 
     def __call__(self, notices: protocols.LineNotices, /) -> protocols.LineNotices:
+        """
+        Perform the transformation
+
+        :param notices: The line notices to change
+        :returns:
+            A copy of the passed in notices with the additional notices appended.
+            This changer never returns ``None``.
+        """
         return notices.set_notices(
             [*list(notices), *self.notices_maker(notices)],
             allow_empty=True,
@@ -153,10 +169,8 @@ class ModifyLatestMatch:
     :param matcher:
         A function given each notice from the back to the front till ``True``
         is returned to indicate a notice that should be changed
-    :raises MissingNotices: if no notice matches and ``must_exist`` is True
-    :returns:
-        A copy of the line notices with the changed notice, or ``None`` if
-        ``allow_empty`` is ``False`` and no notices are left after the change.
+
+    .. automethod:: __call__
     """
 
     must_exist: bool = False
@@ -165,6 +179,15 @@ class ModifyLatestMatch:
     matcher: Callable[[protocols.ProgramNotice], bool]
 
     def __call__(self, notices: protocols.LineNotices) -> protocols.LineNotices | None:
+        """
+        Perform the transformation
+
+        :param notices: The line notices to change
+        :raises MissingNotices: if no notice matches and ``must_exist`` is True
+        :returns:
+            A copy of the line notices with the changed notice, or ``None`` if
+            ``allow_empty`` is ``False`` and no notices are left after the change.
+        """
         replaced: list[protocols.ProgramNotice | None] = []
         found: bool = False
         for notice in reversed(list(notices)):
@@ -247,15 +270,8 @@ class ModifyLine:
         ``name_must_exist`` and ``line_must_exist`` flags are ``False`` and
         the resolved line number doesn't have an existing line notices, a new
         one will be generated to pass into ``change``
-    :raises MissingNotices:
-        if ``name_must_exist`` is ``True`` and ``name_or_line`` is a string and
-        not a registered name
-    :raises MissingNotices:
-        if ``line_must_exist`` is ``True`` and the resolved line number doesn't
-        already have line notices on the file notices.
-    :returns:
-        A copy of the file notices with changed line notices for the resolved
-        line number.
+
+    .. automethod:: __call__
     """
 
     name_or_line: str | int
@@ -264,6 +280,20 @@ class ModifyLine:
     change: protocols.LineNoticesChanger
 
     def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
+        """
+        Perform the transformation
+
+        :param notices: The file notices to change
+        :raises MissingNotices:
+            if ``name_must_exist`` is ``True`` and ``name_or_line`` is a string and
+            not a registered name
+        :raises MissingNotices:
+            if ``line_must_exist`` is ``True`` and the resolved line number doesn't
+            already have line notices on the file notices.
+        :returns:
+            A copy of the file notices with changed line notices for the resolved
+            line number.
+        """
         line_notices: protocols.LineNotices | None = None
         line_number = notices.get_line_number(self.name_or_line)
         if line_number is not None:
@@ -332,12 +362,8 @@ class ModifyFile:
         A function that takes a file notices to change. One will be generated
         if the location isn't already in the program notices and ``must_exist``
         is ``False``.
-    :raises MissingNotices:
-        if ``must_exist`` is ``True`` and the ``location`` isn't already in the
-        program notices.
-    :returns:
-        A copy of the program notices with chagned file notices for the specified
-        location.
+
+    .. automethod:: __call__
     """
 
     location: pathlib.Path
@@ -345,6 +371,17 @@ class ModifyFile:
     change: protocols.FileNoticesChanger
 
     def __call__(self, notices: protocols.ProgramNotices) -> protocols.ProgramNotices:
+        """
+        Perform the transformation
+
+        :param notices: The program notices to change
+        :raises MissingNotices:
+            if ``must_exist`` is ``True`` and the ``location`` isn't already in the
+            program notices.
+        :returns:
+            A copy of the program notices with chagned file notices for the specified
+            location.
+        """
         file_notices = notices.notices_at_location(self.location)
         if file_notices is None and self.must_exist:
             raise MissingNotices(location=self.location)

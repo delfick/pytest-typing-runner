@@ -498,11 +498,82 @@ class ProgramNotices:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class AddRevealedTypes:
+    """
+    Used to add revealed type notices to a specific line
+
+    .. code-block:: python
+
+        from pytest_typing_runner import notices, protocols
+
+
+        file_notices: protocols.FileNotices = ...
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=note:: Revealed type is "one"',
+            'severity=error[arg-type]:: an error',
+            'severity=note:: a note',
+        ]
+        assert file_notices.get_line_number("line_name") == 1
+
+        changed = notices.AddRevealedTypes(
+            name="line_name",
+            revealed=["two", "three"],
+        )(file_notices)
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=note:: Revealed type is "one"',
+            'severity=error[arg-type]:: an error',
+            'severity=note:: a note',
+            'severity=note:: Revealed type is "two"',
+            'severity=note:: Revealed type is "three"',
+        ]
+
+    Where existing revealed notes can be removed. For example, continuing the code example:
+
+    .. code-block:: python
+
+        changed = notices.AddRevealedTypes(
+            name="line_name",
+            revealed=["two", "three"],
+            replace=True
+        )(file_notices)
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=error[arg-type]:: an error',
+            'severity=note:: a note',
+            'severity=note:: Revealed type is "two"',
+            'severity=note:: Revealed type is "three"',
+        ]
+
+    .. note::
+        When there are multiple items in revealed, only one notice is appended
+        where the different notes are in a single multiline string for the msg
+        of that one notice. The default implementation for comparing notices already
+        knows how to split these into multiple notices.
+
+    :param name:
+        The name of the line to change. The name must already be registered
+    :param revealed:
+        A sequence of strings to add reveal messages for. Each message is wrapped
+        such that if the string is 'X' the result is 'Revealed type is "X"'
+    :param replace:
+        Defaults to ``False``. When ``True`` any existing reveal notes will be
+        removed before new ones are added.
+    """
+
     name: str
     revealed: Sequence[str]
     replace: bool = False
 
     def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
+        """
+        Peforms the transformation
+
+        :param notices: The file notices to change
+        :raises MissingNotices:
+            When the specified ``name`` isn't registered with the file notices.
+        :returns:
+            Copy of the file notices with additional reveal notes, where existing reveal
+            notes have been removed if ``replace`` is ``True``
+        """
+
         def make_notices(
             notices: protocols.LineNotices, /
         ) -> Sequence[protocols.ProgramNotice | None]:
@@ -531,11 +602,80 @@ class AddRevealedTypes:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class AddErrors:
+    """
+    Used to add error notices to a specific line
+
+    .. code-block:: python
+
+        from pytest_typing_runner import notices, protocols
+
+
+        file_notices: protocols.FileNotices = ...
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=note:: Revealed type is "one"',
+            'severity=error[arg-type]:: an error',
+            'severity=note:: a note',
+        ]
+        assert file_notices.get_line_number("line_name") == 1
+
+        changed = notices.AddErrors(
+            name="line_name",
+            errors=[("misc", "error two"), ("assignment", "error three")],
+        )(file_notices)
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=note:: Revealed type is "one"',
+            'severity=error[arg-type]:: an error',
+            'severity=note:: a note',
+            'severity=error[misc]:: error two',
+            'severity=error[assignment]:: error three',
+        ]
+
+    Where existing errors can be removed. For example, continuing the code example:
+
+    .. code-block:: python
+
+        changed = notices.AddErrors(
+            name="line_name",
+            errors=[("misc", "error two"), ("assignment", "error three")],
+            replace=True,
+        )(file_notices)
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=note:: Revealed type is "one"',
+            'severity=note:: a note',
+            'severity=error[misc]:: error two',
+            'severity=error[assignment]:: error three',
+        ]
+
+    .. note::
+        Unlike :class:`AddRevealedTypes` every entry in ``errors`` becomes it's
+        own notice.
+
+    :param name:
+        The name of the line to change. The name must already be registered
+    :param errors:
+        A sequence of two string tuples where the first string is the error type
+        and the second string is the error message.
+    :param replace:
+        Defaults to ``False``. When ``True`` any existing error notices will be
+        removed before new ones are added.
+    """
+
     name: str
     errors: Sequence[tuple[str, str]]
     replace: bool = False
 
     def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
+        """
+        Peforms the transformation
+
+        :param notices: The file notices to change
+        :raises MissingNotices:
+            When the specified ``name`` isn't registered with the file notices.
+        :returns:
+            Copy of the file notices with additional error notices, where existing error
+            notices have been removed if ``replace`` is ``True``
+        """
+
         def make_notices(
             notices: protocols.LineNotices, /
         ) -> Sequence[protocols.ProgramNotice | None]:
@@ -562,18 +702,103 @@ class AddErrors:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class AddNotes:
+    """
+    Used to add note notices to a specific line
+
+    .. code-block:: python
+
+        from pytest_typing_runner import notices, protocols
+
+
+        file_notices: protocols.FileNotices = ...
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=note:: Revealed type is "one"',
+            'severity=error[arg-type]:: an error',
+            'severity=note:: a note',
+        ]
+        assert file_notices.get_line_number("line_name") == 1
+
+        changed = notices.AddNotes(
+            name="line_name",
+            notes=["two", "three"],
+        )(file_notices)
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=note:: Revealed type is "one"',
+            'severity=error[arg-type]:: an error',
+            'severity=note:: a note',
+            'severity=note:: two',
+            'severity=note:: three',
+        ]
+
+    Where existing notes can be removed. For example, continuing the code example:
+
+    .. code-block:: python
+
+        changed = notices.AddNotes(
+            name="line_name",
+            notes=["two", "three"],
+            replace=True,
+        )(file_notices)
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=error[arg-type]:: an error',
+            'severity=note:: two',
+            'severity=note:: three',
+        ]
+
+    And existing reveal notes can be left alone, continuing the code example:
+
+    .. code-block:: python
+
+        changed = notices.AddNotes(
+            name="line_name",
+            notes=["two", "three"],
+            replace=True,
+            keep_reveals=True,
+        )(file_notices)
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=note:: Revealed type is "one"',
+            'severity=error[arg-type]:: an error',
+            'severity=note:: two',
+            'severity=note:: three',
+        ]
+
+    .. note::
+        Like :class:AddRevealedTypes: only one notice is append to the end
+        where the message is a multiline string with each note on it's own line
+
+    :param name:
+        The name of the line to change. The name must already be registered
+    :param notes:
+        A sequence of strings representing each note to add
+    :param replace:
+        Defaults to ``False``. When ``True`` any existing notes removed before new
+        ones are added.
+    :param keep_reveals:
+        Defaults to ``True``. When ``replace`` is ``True`` and this is ``True`` then notes
+        that are type reveals will not be removed.
+    """
+
     name: str
     notes: Sequence[str]
     replace: bool = False
     keep_reveals: bool = True
 
     def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
+        """
+        Peforms the transformation
+
+        :param notices: The file notices to change
+        :raises MissingNotices:
+            When the specified ``name`` isn't registered with the file notices.
+        :returns:
+            Copy of the file notices with additional notes, where existing notes are removed
+            depending on the values of ``replace`` and ``keep_reveals``.
+        """
+
         def make_notices(
             notices: protocols.LineNotices, /
         ) -> Sequence[protocols.ProgramNotice | None]:
-            return [
-                notices.generate_notice(severity=NoteSeverity(), msg=note) for note in self.notes
-            ]
+            return [notices.generate_notice(severity=NoteSeverity(), msg="\n".join(self.notes))]
 
         def change(notices: protocols.LineNotices, /) -> protocols.LineNotices | None:
             if self.replace:
@@ -596,16 +821,73 @@ class AddNotes:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class RemoveFromRevealedType:
+    """
+    Used to remove some specific string from existing reveal notes.
+
+    .. code-block:: python
+
+        from pytest_typing_runner import notices, protocols
+
+
+        file_notices: protocols.FileNotices = ...
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=note:: Revealed type is "some specific message"',
+            'severity=error[arg-type]:: an error',
+            'severity=note:: a specific note',
+        ]
+        assert file_notices.get_line_number("line_name") == 1
+
+        changed = notices.RemoveFromRevealedType(
+            name="line_name",
+            remove="specific",
+        )(file_notices)
+        assert [n.display() for n in file_notices.notices_at_line(1)] == [
+            'severity=note:: Revealed type is "some  message"',
+            'severity=error[arg-type]:: an error',
+            'severity=note:: a specific note',
+        ]
+
+    :param name:
+        The name of the line to change. The name must already be registered
+    :param remove:
+        The string to remove from all reveal notes that are found.
+    :param must_exist:
+        Defaults to ``True``. When ``True`` and no reveal notes are found with the specified
+        ``replace`` string, then :class:`MissingNotices` will be raised.
+    """
+
     name: str
     remove: str
+    must_exist: bool = True
 
     def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
+        """
+        Peforms the transformation
+
+        :param notices: The file notices to change
+        :raises MissingNotices:
+            When the specified ``name`` isn't registered with the file notices.
+        :raises MissingNotices:
+            When ``must_exist`` is ``True`` and no reveal notes with the ``replace`` string are found
+        :returns:
+            Copy of the file notices where all revealed notes at the specified line have the
+            ``replace`` string removed from their ``msg``.
+        """
+
         def change(notices: protocols.LineNotices, /) -> protocols.LineNotices | None:
+            found: bool = False
             replaced: list[protocols.ProgramNotice | None] = []
             for notice in notices:
                 if notice.is_type_reveal:
-                    notice = notice.clone(msg=notice.msg.replace(self.remove, ""))
+                    if self.remove in notice.msg:
+                        found = True
+                        notice = notice.clone(msg=notice.msg.replace(self.remove, ""))
                 replaced.append(notice)
+
+            if not found and self.must_exist:
+                raise notice_changers.MissingNotices(
+                    location=notices.location, line_number=notices.line_number, name=self.name
+                )
 
             return notices.set_notices(replaced)
 

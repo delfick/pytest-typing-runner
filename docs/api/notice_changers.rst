@@ -13,7 +13,17 @@ These helpers are split into high level helpers available in
 High level changers
 -------------------
 
-TBD
+.. autoclass:: pytest_typing_runner.notices.AddRevealedTypes
+   :members: __call__
+
+.. autoclass:: pytest_typing_runner.notices.AddErrors
+   :members: __call__
+
+.. autoclass:: pytest_typing_runner.notices.AddNotes
+   :members: __call__
+
+.. autoclass:: pytest_typing_runner.notices.RemoveFromRevealedType
+   :members: __call__
 
 Low level changers
 ------------------
