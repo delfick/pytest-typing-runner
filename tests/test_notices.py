@@ -362,6 +362,29 @@ class TestFileNotices:
         assert not file_notices.has_notices
         assert list(file_notices) == []
 
+    def test_it_can_get_known_names(self, tmp_path: pathlib.Path) -> None:
+        file_notices = notices.FileNotices(location=tmp_path)
+        assert file_notices.known_names == {}
+        assert file_notices.set_name("one", 1).set_name("two", 2).known_names == {
+            "one": 1,
+            "two": 2,
+        }
+
+    def test_it_can_get_known_line_numbers(self, tmp_path: pathlib.Path) -> None:
+        file_notices = notices.FileNotices(location=tmp_path)
+        assert list(file_notices.known_line_numbers()) == []
+
+        file_notices = file_notices.set_lines(
+            {
+                2: (ln := file_notices.generate_notices_for_line(2)).set_notices(
+                    [ln.generate_notice(msg="n1"), ln.generate_notice(msg="n2")]
+                ),
+                1: file_notices.generate_notices_for_line(1),
+                3: file_notices.generate_notices_for_line(3),
+            }
+        )
+        assert list(file_notices.known_line_numbers()) == [1, 2, 3]
+
     def test_it_can_clear_notices(self, tmp_path: pathlib.Path) -> None:
         file_notices = notices.FileNotices(location=tmp_path)
 
@@ -713,6 +736,33 @@ class TestProgramNotices:
             assert sorted(file_diff) == sorted(expected.by_file[location])
 
         assert diff == expected
+
+    def test_it_can_get_known_locations(self, tmp_path: pathlib.Path) -> None:
+        program_notices = notices.ProgramNotices()
+
+        fn1 = program_notices.generate_notices_for_location(tmp_path / "a" / "one")
+        f1l1 = fn1.generate_notices_for_line(1)
+        program_notices = program_notices.set_files(
+            {fn1.location: fn1.set_lines({f1l1.line_number: f1l1})}
+        )
+        assert list(program_notices.known_locations()) == [fn1.location]
+
+        fn2 = program_notices.generate_notices_for_location(tmp_path / "b" / "two")
+        f2l1 = fn2.generate_notices_for_line(1)
+        na3 = f2l1.generate_notice(msg="na3")
+        f2l3 = fn2.generate_notices_for_line(3)
+        na5 = f2l3.generate_notice(msg="na5")
+        program_notices = program_notices.set_files(
+            {
+                fn2.location: fn2.set_lines(
+                    {
+                        f2l1.line_number: f2l1.set_notices([na3]),
+                        f2l3.line_number: f2l3.set_notices([na5]),
+                    }
+                ),
+            }
+        )
+        assert list(program_notices.known_locations()) == [fn1.location, fn2.location]
 
 
 class TestAddRevealedTypes:

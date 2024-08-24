@@ -473,6 +473,17 @@ class FileNotices(Protocol):
         Whether this file has notices
         """
 
+    @property
+    def known_names(self) -> Mapping[str, int]:
+        """
+        Return the registered names
+        """
+
+    def known_line_numbers(self) -> Iterator[int]:
+        """
+        Yield the line numbers that have line notices
+        """
+
     def __iter__(self) -> Iterator[ProgramNotice]:
         """
         Yield all the notices
@@ -538,6 +549,11 @@ class ProgramNotices(Protocol):
     def __iter__(self) -> Iterator[ProgramNotice]:
         """
         Yield all the notices
+        """
+
+    def known_locations(self) -> Iterator[pathlib.Path]:
+        """
+        Yield locations that have associated file notices
         """
 
     def diff(self, root_dir: pathlib.Path, other: ProgramNotices) -> DiffNotices:

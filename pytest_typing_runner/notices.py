@@ -268,6 +268,19 @@ class FileNotices:
         for _, notices in sorted(self.by_line_number.items()):
             yield from notices
 
+    def known_line_numbers(self) -> Iterator[int]:
+        """
+        Yield the line numbers that have line notices
+        """
+        yield from sorted(self.by_line_number.keys())
+
+    @property
+    def known_names(self) -> Mapping[str, int]:
+        """
+        Return the registered names
+        """
+        return dict(self.name_to_line_number)
+
     def get_line_number(self, name_or_line: str | int, /) -> int | None:
         """
         Normalise a name or line number to a line number.
@@ -411,6 +424,12 @@ class ProgramNotices:
         """
         for _, notices in sorted(self.notices.items()):
             yield from notices
+
+    def known_locations(self) -> Iterator[pathlib.Path]:
+        """
+        Yield locations that have associated file notices
+        """
+        yield from sorted(self.notices.keys())
 
     def diff(
         self, root_dir: pathlib.Path, other: protocols.ProgramNotices
