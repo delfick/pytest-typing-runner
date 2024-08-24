@@ -1,6 +1,5 @@
 import dataclasses
 import enum
-import importlib
 import pathlib
 import re
 from collections.abc import Iterator, Mapping, Sequence
@@ -190,21 +189,8 @@ class MypyOutput:
                 line_number=int(groups["line_number"]),
                 col=None if not (col := groups["col"]) else int(col),
                 severity=severity,
-                msg=cls._normalise_mypy_msg(groups["msg"]).strip(),
+                msg=groups["msg"].strip(),
             )
-
-        @classmethod
-        def _normalise_mypy_msg(cls, msg: str) -> str:
-            msg = "\n".join(line for line in msg.split("\n") if not line.startswith(":debug:"))
-
-            if importlib.metadata.version("mypy") == "1.4.0":
-                return (
-                    msg.replace("type[", "Type[")
-                    .replace("django.db.models.query.QuerySet", "django.db.models.query._QuerySet")
-                    .replace("Type[Concrete?", "type[Concrete?")
-                )
-            else:
-                return msg
 
     @classmethod
     def parse(
@@ -212,6 +198,7 @@ class MypyOutput:
         lines: Sequence[str],
         /,
         *,
+        normalise: protocols.ProgramNoticeChanger,
         into: protocols.ProgramNotices,
         root_dir: pathlib.Path,
     ) -> protocols.ProgramNotices:
@@ -226,7 +213,11 @@ class MypyOutput:
                     line_must_exist=False,
                     change=notice_changers.AppendToLine(
                         notices_maker=lambda line_notices: [
-                            line_notices.generate_notice(severity=match.severity, msg=match.msg)
+                            normalise(
+                                line_notices.generate_notice(
+                                    severity=match.severity, msg=match.msg
+                                )
+                            )
                         ]
                     ),
                 ),

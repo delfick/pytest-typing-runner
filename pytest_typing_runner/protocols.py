@@ -620,6 +620,13 @@ class Scenario(Protocol):
         Used to transform and parse content for any expected notices in the comments
         """
 
+    def normalise_program_runner_notice(
+        self: T_Scenario, options: RunOptions[T_Scenario], notice: ProgramNotice, /
+    ) -> ProgramNotice:
+        """
+        Used to normalise each notice parsed from the output of the program runner
+        """
+
     def check_results(
         self: T_Scenario, result: RunResult[T_Scenario], expectations: Expectations[T_Scenario]
     ) -> None:

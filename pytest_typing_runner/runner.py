@@ -69,7 +69,9 @@ class ExternalMypyRunner(Generic[protocols.T_Scenario]):
         result: protocols.RunResult[protocols.T_Scenario],
         expected_notices: protocols.ProgramNotices,
     ) -> None:
-        lines: list[str] = result.stdout.strip().split("\n")
+        lines: list[str] = [
+            line for line in result.stdout.strip().split("\n") if not line.startswith(":debug:")
+        ]
         if lines[-1].startswith("Found "):
             lines.pop()
 
@@ -79,6 +81,9 @@ class ExternalMypyRunner(Generic[protocols.T_Scenario]):
         got = interpret.MypyOutput.parse(
             lines,
             into=result.options.scenario.generate_program_notices(),
+            normalise=functools.partial(
+                result.options.scenario.normalise_program_runner_notice, result.options
+            ),
             root_dir=result.options.cwd,
         )
         expectations.compare_notices(
@@ -193,7 +198,9 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
         result: protocols.RunResult[protocols.T_Scenario],
         expected_notices: protocols.ProgramNotices,
     ) -> None:
-        lines: list[str] = result.stdout.strip().split("\n")
+        lines: list[str] = [
+            line for line in result.stdout.strip().split("\n") if not line.startswith(":debug:")
+        ]
         if lines[-1].startswith("Found "):
             lines.pop()
 
@@ -203,6 +210,9 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
         got = interpret.MypyOutput.parse(
             lines,
             into=result.options.scenario.generate_program_notices(),
+            normalise=functools.partial(
+                result.options.scenario.normalise_program_runner_notice, result.options
+            ),
             root_dir=result.options.cwd,
         )
         expectations.compare_notices(
@@ -249,7 +259,9 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
         result: protocols.RunResult[protocols.T_Scenario],
         expected_notices: protocols.ProgramNotices,
     ) -> None:
-        lines: list[str] = result.stdout.strip().split("\n")
+        lines: list[str] = [
+            line for line in result.stdout.strip().split("\n") if not line.startswith(":debug:")
+        ]
         if lines[-1].startswith("Found "):
             lines.pop()
 
@@ -272,6 +284,9 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
         got = interpret.MypyOutput.parse(
             lines,
             into=result.options.scenario.generate_program_notices(),
+            normalise=functools.partial(
+                result.options.scenario.normalise_program_runner_notice, result.options
+            ),
             root_dir=result.options.cwd,
         )
         expectations.compare_notices(
