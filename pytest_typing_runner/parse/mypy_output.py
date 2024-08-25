@@ -7,7 +7,7 @@ from typing import ClassVar
 from typing_extensions import Self
 
 from .. import notice_changers, notices, protocols
-from . import errors as interpret_errors
+from . import errors as parse_errors
 
 
 class MypyOutput:
@@ -16,7 +16,7 @@ class MypyOutput:
 
     .. code-block:: python
 
-        from pytest_typing_runner import interpret, protocols
+        from pytest_typing_runner import parse, protocols
         from collections.abc import Sequence
         import pathlib
 
@@ -41,7 +41,7 @@ class MypyOutput:
             return notice.clone(msg=notice.msg.replace("Type[", "type["))
 
 
-        full_program_notices = interpret.MypyOutput.parse(
+        full_program_notices = parse.MypyOutput.parse(
             mypy_output,
             into=empty_program_notices,
             normalise=normalise,
@@ -77,7 +77,7 @@ class MypyOutput:
             elif severity_match == "note":
                 severity = notices.NoteSeverity()
             else:
-                raise interpret_errors.UnknownSeverity(line=line, severity=severity_match)
+                raise parse_errors.UnknownSeverity(line=line, severity=severity_match)
 
             return cls(
                 filename=groups["filename"],
@@ -126,7 +126,7 @@ class MypyOutput:
         for line in lines:
             match = cls._LineMatch.match(line)
             if match is None:
-                raise interpret_errors.InvalidMypyOutputLine(line=line)
+                raise parse_errors.InvalidMypyOutputLine(line=line)
 
             program_notices = notice_changers.ModifyFile(
                 location=root_dir / match.filename,

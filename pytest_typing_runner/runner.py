@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Generic, TextIO, cast
 
 import pytest
 
-from . import expectations, interpret, protocols
+from . import expectations, parse, protocols
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -78,7 +78,7 @@ class ExternalMypyRunner(Generic[protocols.T_Scenario]):
         if lines[-1].startswith("Success: no issues"):
             lines.pop()
 
-        got = interpret.MypyOutput.parse(
+        got = parse.MypyOutput.parse(
             lines,
             into=result.options.scenario.generate_program_notices(),
             normalise=functools.partial(
@@ -207,7 +207,7 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
         if lines[-1].startswith("Success: no issues"):
             lines.pop()
 
-        got = interpret.MypyOutput.parse(
+        got = parse.MypyOutput.parse(
             lines,
             into=result.options.scenario.generate_program_notices(),
             normalise=functools.partial(
@@ -281,7 +281,7 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
         if lines and lines[0] == "Daemon started":
             lines.pop(0)
 
-        got = interpret.MypyOutput.parse(
+        got = parse.MypyOutput.parse(
             lines,
             into=result.options.scenario.generate_program_notices(),
             normalise=functools.partial(

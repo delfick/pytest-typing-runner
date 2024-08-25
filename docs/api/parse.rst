@@ -5,8 +5,8 @@ Parsing content for notices
 
 This plugin provides some helpers for parsing content for :ref:`notices <notices>`.
 
-Interpreting Mypy output
-------------------------
+Parsing Mypy output
+-------------------
 
-.. autoclass:: pytest_typing_runner.interpret.MypyOutput
+.. autoclass:: pytest_typing_runner.parse.MypyOutput
     :members:

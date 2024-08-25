@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, ClassVar, cast
 from typing_extensions import Self, assert_never
 
 from .. import notice_changers, notices, protocols
-from . import errors as interpret_errors
-from . import protocols as interpret_protocols
+from . import errors as parse_errors
+from . import protocols as parse_protocols
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -51,7 +51,7 @@ class InstructionMatch:
     is_error: bool = False
     is_note: bool = False
 
-    modify_lines: interpret_protocols.ModifyParsedLineBefore | None = None
+    modify_lines: parse_protocols.ModifyParsedLineBefore | None = None
 
     potential_instruction_regex: ClassVar[re.Pattern[str]] = re.compile(r"^\s*#\s*\^")
     instruction_regex: ClassVar[re.Pattern[str]] = re.compile(
@@ -99,7 +99,7 @@ class InstructionMatch:
         m = cls.instruction_regex.match(line)
         if m is None:
             if cls.potential_instruction_regex.match(line):
-                raise interpret_errors.InvalidInstruction(
+                raise parse_errors.InvalidInstruction(
                     reason="Looks like line is trying to be an expectation but it didn't pass the regex for one",
                     line=line,
                 )
@@ -114,19 +114,19 @@ class InstructionMatch:
         rest = gd["rest"].strip()
 
         if error_type and instruction is not cls._Instruction.ERROR:
-            raise interpret_errors.InvalidInstruction(
+            raise parse_errors.InvalidInstruction(
                 reason="Only Error instructions should be of the form 'INSTRUCTION(error_type)'",
                 line=line,
             )
 
         if instruction is cls._Instruction.ERROR and not error_type:
-            raise interpret_errors.InvalidInstruction(
+            raise parse_errors.InvalidInstruction(
                 reason="Must use `# ^ ERROR(error-type) ^` with the ERROR instruction",
                 line=line,
             )
 
         if instruction is cls._Instruction.NAME and not name:
-            raise interpret_errors.InvalidInstruction(
+            raise parse_errors.InvalidInstruction(
                 reason="Must use `# ^ NAME[name] ^` with the NAME instruction",
                 line=line,
             )
@@ -164,11 +164,11 @@ class InstructionMatch:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class InstructionParser:
-    parser: interpret_protocols.CommentMatchMaker
+    parser: parse_protocols.CommentMatchMaker
 
     def parse(
-        self, before: interpret_protocols.ParsedLineBefore, /
-    ) -> interpret_protocols.ParsedLineAfter:
+        self, before: parse_protocols.ParsedLineBefore, /
+    ) -> parse_protocols.ParsedLineAfter:
         line = before.lines[-1]
         match = self.parser(line)
         if match is None:
@@ -213,7 +213,7 @@ class InstructionParser:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class FileContent:
-    parsers: Sequence[interpret_protocols.LineParser] = dataclasses.field(
+    parsers: Sequence[parse_protocols.LineParser] = dataclasses.field(
         default_factory=lambda: (InstructionParser(parser=InstructionMatch.match).parse,)
     )
 
@@ -230,7 +230,7 @@ class FileContent:
             real_line: bool = True
             result.append(line)
 
-            afters: list[interpret_protocols.ParsedLineAfter] = []
+            afters: list[parse_protocols.ParsedLineAfter] = []
             for parser in self.parsers:
                 before = _ParsedLineBefore(lines=result, line_number_for_name=line_number_for_name)
                 after = parser(before)
@@ -259,8 +259,8 @@ class FileContent:
 
 if TYPE_CHECKING:
     _FCP: protocols.FileNoticesParser = cast(FileContent, None).parse
-    _PLB: interpret_protocols.P_ParsedLineBefore = cast(_ParsedLineBefore, None)
-    _PLA: interpret_protocols.P_ParsedLineAfter = cast(_ParsedLineAfter, None)
-    _IM: interpret_protocols.P_CommentMatch = cast(InstructionMatch, None)
-    _IMM: interpret_protocols.P_CommentMatchMaker = InstructionMatch.match
-    _IP: interpret_protocols.P_LineParser = cast(InstructionParser, None).parse
+    _PLB: parse_protocols.P_ParsedLineBefore = cast(_ParsedLineBefore, None)
+    _PLA: parse_protocols.P_ParsedLineAfter = cast(_ParsedLineAfter, None)
+    _IM: parse_protocols.P_CommentMatch = cast(InstructionMatch, None)
+    _IMM: parse_protocols.P_CommentMatchMaker = InstructionMatch.match
+    _IP: parse_protocols.P_LineParser = cast(InstructionParser, None).parse

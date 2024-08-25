@@ -4,27 +4,27 @@ import textwrap
 import pytest
 from pytest_typing_runner_test_driver import matchers
 
-from pytest_typing_runner import interpret, notices
+from pytest_typing_runner import notices, parse
 
 
 class TestMypyOutput:
     class TestLineMatch:
         def test_it_complains_if_severity_is_not_note_or_error(self) -> None:
-            with pytest.raises(interpret.errors.UnknownSeverity) as e:
-                interpret.MypyOutput._LineMatch.match(
+            with pytest.raises(parse.errors.UnknownSeverity) as e:
+                parse.MypyOutput._LineMatch.match(
                     'djangoexample/views.py:53: wat: Revealed type is "djangoexample.exampleapp.models.Child2QuerySet"'
                 )
             assert e.value.severity == "wat"
 
         def test_it_does_not_match_an_empty_line(self) -> None:
-            m = interpret.MypyOutput._LineMatch.match("")
+            m = parse.MypyOutput._LineMatch.match("")
             assert m is None
 
         def test_it_matches_type_reveals(self) -> None:
-            m = interpret.MypyOutput._LineMatch.match(
+            m = parse.MypyOutput._LineMatch.match(
                 'djangoexample/views.py:53: note: Revealed type is "djangoexample.exampleapp.models.Child2QuerySet"'
             )
-            assert m == interpret.MypyOutput._LineMatch(
+            assert m == parse.MypyOutput._LineMatch(
                 filename="djangoexample/views.py",
                 line_number=53,
                 col=None,
@@ -33,10 +33,10 @@ class TestMypyOutput:
             )
 
         def test_it_matches_notes(self) -> None:
-            m = interpret.MypyOutput._LineMatch.match(
+            m = parse.MypyOutput._LineMatch.match(
                 "djangoexample/views.py:20: note: Possible overload variants:"
             )
-            assert m == interpret.MypyOutput._LineMatch(
+            assert m == parse.MypyOutput._LineMatch(
                 filename="djangoexample/views.py",
                 line_number=20,
                 col=None,
@@ -45,10 +45,10 @@ class TestMypyOutput:
             )
 
         def test_it_matches_errors(self) -> None:
-            m = interpret.MypyOutput._LineMatch.match(
+            m = parse.MypyOutput._LineMatch.match(
                 "djangoexample/views.py:18: error: Missing return statement  [empty-body]"
             )
-            assert m == interpret.MypyOutput._LineMatch(
+            assert m == parse.MypyOutput._LineMatch(
                 filename="djangoexample/views.py",
                 line_number=18,
                 col=None,
@@ -58,10 +58,10 @@ class TestMypyOutput:
 
         def test_it_matches_with_column_numbers(self) -> None:
             # Note mypy only shows column numbers with --show-column-numbers
-            m = interpret.MypyOutput._LineMatch.match(
+            m = parse.MypyOutput._LineMatch.match(
                 'djangoexample/views.py:15:24: error: Unsupported operand types for + ("str" and "int")  [operator]'
             )
-            assert m == interpret.MypyOutput._LineMatch(
+            assert m == parse.MypyOutput._LineMatch(
                 filename="djangoexample/views.py",
                 line_number=15,
                 col=24,
@@ -70,7 +70,7 @@ class TestMypyOutput:
             )
 
         def test_it_does_not_match_on_bad_line(self) -> None:
-            m = interpret.MypyOutput._LineMatch.match(
+            m = parse.MypyOutput._LineMatch.match(
                 'djangoexample/views.py:15 wat: Unsupported operand types for + ("str" and "int")  [operator]'
             )
             assert m is None
@@ -84,8 +84,8 @@ class TestMypyOutput:
             mainsfd .py:7: note
             """)
 
-            with pytest.raises(interpret.errors.InvalidMypyOutputLine) as e:
-                interpret.MypyOutput.parse(
+            with pytest.raises(parse.errors.InvalidMypyOutputLine) as e:
+                parse.MypyOutput.parse(
                     mypy_output.strip().split("\n"),
                     normalise=lambda notice: notice,
                     into=program_notices,
@@ -107,7 +107,7 @@ class TestMypyOutput:
             three/six/five.py:20: error: more broken  [arg-type]
             """)
 
-            parsed = interpret.MypyOutput.parse(
+            parsed = parse.MypyOutput.parse(
                 mypy_output.strip().split("\n"),
                 normalise=lambda notice: notice,
                 into=program_notices,
@@ -195,7 +195,7 @@ class TestMypyOutput:
             three/six/five.py:20: error: more broken  [arg-type]
             """)
 
-            parsed = interpret.MypyOutput.parse(
+            parsed = parse.MypyOutput.parse(
                 mypy_output.strip().split("\n"),
                 normalise=lambda notice: notice.clone(
                     msg=notice.msg.replace("broken", "CLEAN")

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self, assert_never
 
-from . import interpret, notices, protocols, runner
+from . import notices, parse, protocols, runner
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -181,7 +181,7 @@ class Scenario:
     def parse_notices_from_file(
         self, content: str, /, *, into: protocols.FileNotices
     ) -> tuple[str, protocols.FileNotices]:
-        return interpret.FileContent().parse(textwrap.dedent(content), into=into)
+        return parse.FileContent().parse(textwrap.dedent(content), into=into)
 
     def normalise_program_runner_notice(
         self: protocols.T_Scenario,
