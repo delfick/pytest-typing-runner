@@ -40,7 +40,7 @@ class TestInstructionMatch:
             "# type-ignore[arg-type]",
             "# stuff and things",
         ]:
-            assert parse.file_content.InstructionMatch.match(code_line) is None
+            assert list(parse.file_content.InstructionMatch.match(code_line)) == []
 
     def test_it_complains_about_lines_that_look_like_instructions_but_are_not(self) -> None:
         for invalid in [
@@ -51,20 +51,28 @@ class TestInstructionMatch:
             "# ^ note ^ asdf",
         ]:
             with pytest.raises(parse.errors.InvalidInstruction):
-                parse.file_content.InstructionMatch.match(invalid)
+                list(parse.file_content.InstructionMatch.match(invalid))
 
     def test_it_captures_note_instructions(self) -> None:
-        assert parse.file_content.InstructionMatch.match(
-            "# ^ NOTE ^ hello"
-        ) == parse.file_content.InstructionMatch(
-            severity=notices.NoteSeverity(), msg="hello", is_note=True, names=[]
-        )
+        assert list(parse.file_content.InstructionMatch.match("# ^ NOTE ^ hello")) == [
+            parse.file_content.InstructionMatch(
+                severity=notices.NoteSeverity(),
+                msg="hello",
+                is_note=True,
+                is_whole_line=True,
+                names=[],
+            )
+        ]
 
-        assert parse.file_content.InstructionMatch.match(
-            "# ^ NOTE[one] ^ hello"
-        ) == parse.file_content.InstructionMatch(
-            severity=notices.NoteSeverity(), msg="hello", is_note=True, names=["one"]
-        )
+        assert list(parse.file_content.InstructionMatch.match("# ^ NOTE[one] ^ hello")) == [
+            parse.file_content.InstructionMatch(
+                severity=notices.NoteSeverity(),
+                msg="hello",
+                is_note=True,
+                is_whole_line=True,
+                names=["one"],
+            )
+        ]
 
     def test_it_captures_reveal_instructions(self) -> None:
         class MatchModifyLines:
@@ -84,65 +92,77 @@ class TestInstructionMatch:
             def __call__(self, *, before: parse.protocols.ParsedLineBefore) -> Iterator[str]:
                 raise NotImplementedError()
 
-        assert parse.file_content.InstructionMatch.match(
-            "# ^ REVEAL ^ hello"
-        ) == parse.file_content.InstructionMatch(
-            severity=notices.NoteSeverity(),
-            msg='Revealed type is "hello"',
-            is_note=True,
-            is_reveal=True,
-            names=[],
-            modify_lines=MatchModifyLines(prefix_whitespace=""),
-        )
+        assert list(parse.file_content.InstructionMatch.match("# ^ REVEAL ^ hello")) == [
+            parse.file_content.InstructionMatch(
+                severity=notices.NoteSeverity(),
+                msg='Revealed type is "hello"',
+                is_note=True,
+                is_reveal=True,
+                is_whole_line=True,
+                names=[],
+                modify_lines=MatchModifyLines(prefix_whitespace=""),
+            )
+        ]
 
-        assert parse.file_content.InstructionMatch.match(
-            "# ^ REVEAL[two] ^ hello"
-        ) == parse.file_content.InstructionMatch(
-            severity=notices.NoteSeverity(),
-            msg='Revealed type is "hello"',
-            is_note=True,
-            is_reveal=True,
-            names=["two"],
-            modify_lines=MatchModifyLines(prefix_whitespace=""),
-        )
+        assert list(parse.file_content.InstructionMatch.match("# ^ REVEAL[two] ^ hello")) == [
+            parse.file_content.InstructionMatch(
+                severity=notices.NoteSeverity(),
+                msg='Revealed type is "hello"',
+                is_note=True,
+                is_reveal=True,
+                is_whole_line=True,
+                names=["two"],
+                modify_lines=MatchModifyLines(prefix_whitespace=""),
+            )
+        ]
 
-        assert parse.file_content.InstructionMatch.match(
-            "    # ^ REVEAL[two] ^ hello"
-        ) == parse.file_content.InstructionMatch(
-            severity=notices.NoteSeverity(),
-            msg='Revealed type is "hello"',
-            is_note=True,
-            is_reveal=True,
-            names=["two"],
-            modify_lines=MatchModifyLines(prefix_whitespace="    "),
-        )
+        assert list(parse.file_content.InstructionMatch.match("    # ^ REVEAL[two] ^ hello")) == [
+            parse.file_content.InstructionMatch(
+                severity=notices.NoteSeverity(),
+                msg='Revealed type is "hello"',
+                is_note=True,
+                is_reveal=True,
+                is_whole_line=True,
+                names=["two"],
+                modify_lines=MatchModifyLines(prefix_whitespace="    "),
+            )
+        ]
 
     def test_it_captures_error_instructions(self) -> None:
-        assert parse.file_content.InstructionMatch.match(
-            "# ^ ERROR(arg-type) ^ hello"
-        ) == parse.file_content.InstructionMatch(
-            severity=notices.ErrorSeverity("arg-type"), msg="hello", is_error=True, names=[]
-        )
+        assert list(parse.file_content.InstructionMatch.match("# ^ ERROR(arg-type) ^ hello")) == [
+            parse.file_content.InstructionMatch(
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="hello",
+                is_error=True,
+                is_whole_line=True,
+                names=[],
+            )
+        ]
 
-        assert parse.file_content.InstructionMatch.match(
-            "# ^ ERROR(assignment)[three] ^ there"
-        ) == parse.file_content.InstructionMatch(
-            severity=notices.ErrorSeverity("assignment"),
-            msg="there",
-            is_error=True,
-            names=["three"],
-        )
+        assert list(
+            parse.file_content.InstructionMatch.match("# ^ ERROR(assignment)[three] ^ there")
+        ) == [
+            parse.file_content.InstructionMatch(
+                severity=notices.ErrorSeverity("assignment"),
+                msg="there",
+                is_error=True,
+                is_whole_line=True,
+                names=["three"],
+            )
+        ]
 
     def test_error_instructions_must_have_error_type(self) -> None:
         with pytest.raises(parse.errors.InvalidInstruction) as e:
-            parse.file_content.InstructionMatch.match("# ^ ERROR ^ hello")
+            list(parse.file_content.InstructionMatch.match("# ^ ERROR ^ hello"))
 
         assert e.value.reason == "Must use `# ^ ERROR(error-type) ^` with the ERROR instruction"
 
     def test_it_can_parse_name_instruction(self) -> None:
-        assert parse.file_content.InstructionMatch.match(
-            "# ^ NAME[one] ^"
-        ) == parse.file_content.InstructionMatch(severity=notices.NoteSeverity(), names=["one"])
+        assert list(parse.file_content.InstructionMatch.match("# ^ NAME[one] ^")) == [
+            parse.file_content.InstructionMatch(
+                severity=notices.NoteSeverity(), is_whole_line=True, names=["one"]
+            )
+        ]
 
     def test_it_only_let_error_instructions_have_error_tag(self) -> None:
         for invalid in [
@@ -151,7 +171,7 @@ class TestInstructionMatch:
             "# ^ REVEAL(nup)[name] ^",
         ]:
             with pytest.raises(parse.errors.InvalidInstruction) as e:
-                parse.file_content.InstructionMatch.match(invalid)
+                list(parse.file_content.InstructionMatch.match(invalid))
             assert (
                 e.value.reason
                 == "Only Error instructions should be of the form 'INSTRUCTION(error_type)'"
@@ -162,22 +182,24 @@ class TestInstructionParser:
     example_comment_matches: ClassVar[Sequence[object]] = (
         pytest.param(
             parse.file_content.CommentMatch(
-                is_note=True, is_reveal=True, severity=notices.NoteSeverity()
+                is_note=True, is_reveal=True, is_whole_line=True, severity=notices.NoteSeverity()
             ),
             id="reveal",
         ),
         pytest.param(
-            parse.file_content.CommentMatch(is_note=True, severity=notices.NoteSeverity()),
+            parse.file_content.CommentMatch(
+                is_note=True, is_whole_line=True, severity=notices.NoteSeverity()
+            ),
             id="note",
         ),
         pytest.param(
             parse.file_content.CommentMatch(
-                is_error=True, severity=notices.ErrorSeverity("arg-type")
+                is_error=True, is_whole_line=True, severity=notices.ErrorSeverity("arg-type")
             ),
             id="error",
         ),
         pytest.param(
-            parse.file_content.CommentMatch(severity=notices.NoteSeverity()),
+            parse.file_content.CommentMatch(is_whole_line=True, severity=notices.NoteSeverity()),
             id="name",
         ),
     )
@@ -185,8 +207,8 @@ class TestInstructionParser:
     def test_it_makes_no_modification_if_no_comment_match(self) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
-            return None
+        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+            return iter([])
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
         assert after.modify_lines is None
@@ -201,9 +223,9 @@ class TestInstructionParser:
         def modify_lines(*, before: parse.protocols.ParsedLineBefore) -> Iterator[str]:
             yield ""
 
-        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
+        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
             assert isinstance(match, parse.file_content.CommentMatch)
-            return dataclasses.replace(match, modify_lines=modify_lines)
+            yield dataclasses.replace(match, modify_lines=modify_lines)
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
 
@@ -214,9 +236,9 @@ class TestInstructionParser:
     def test_it_passes_on_names(self, match: parse.protocols.CommentMatch) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
+        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
             assert isinstance(match, parse.file_content.CommentMatch)
-            return dataclasses.replace(match, names=["one"])
+            yield dataclasses.replace(match, names=["one"])
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
 
@@ -224,16 +246,38 @@ class TestInstructionParser:
         assert after.names == ["one"]
         assert not after.real_line
 
-    def test_it_adds_append_changer_for_reveal(self, tmp_path: pathlib.Path) -> None:
+    def test_it_says_is_real_line_if_not_for_whole_line(self, tmp_path: pathlib.Path) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
-            return parse.file_content.CommentMatch(
+        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+            yield parse.file_content.CommentMatch(
                 severity=notices.NoteSeverity(),
                 msg=notices.ProgramNotice.reveal_msg("hi"),
                 names=["two"],
                 is_reveal=True,
                 is_note=True,
+                is_whole_line=False,
+            )
+
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+
+        assert after.modify_lines is None
+        assert after.names == ["two"]
+        assert after.real_line
+        assert len(after.notice_changers) == 1
+        assert isinstance(after.notice_changers[0], notice_changers.AppendToLine)
+
+    def test_it_adds_append_changer_for_reveal(self, tmp_path: pathlib.Path) -> None:
+        before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
+
+        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+            yield parse.file_content.CommentMatch(
+                severity=notices.NoteSeverity(),
+                msg=notices.ProgramNotice.reveal_msg("hi"),
+                names=["two"],
+                is_reveal=True,
+                is_note=True,
+                is_whole_line=True,
             )
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
@@ -257,9 +301,13 @@ class TestInstructionParser:
     def test_it_adds_match_latest_matcher_for_note(self, tmp_path: pathlib.Path) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
-            return parse.file_content.CommentMatch(
-                severity=notices.NoteSeverity(), msg="stuff", names=["two"], is_note=True
+        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+            yield parse.file_content.CommentMatch(
+                severity=notices.NoteSeverity(),
+                msg="stuff",
+                names=["two"],
+                is_note=True,
+                is_whole_line=True,
             )
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
@@ -377,12 +425,13 @@ class TestInstructionParser:
     def test_it_adds_append_changer_for_error(self, tmp_path: pathlib.Path) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
-            return parse.file_content.CommentMatch(
+        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+            yield parse.file_content.CommentMatch(
                 severity=notices.ErrorSeverity("arg-type"),
                 msg="error",
                 names=["three"],
                 is_error=True,
+                is_whole_line=True,
             )
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
@@ -409,9 +458,13 @@ class TestInstructionParser:
     def test_it_otherwise_adds_not_changers(self, tmp_path: pathlib.Path) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
-            return parse.file_content.CommentMatch(
-                severity=notices.NoteSeverity(), is_error=False, is_note=False, is_reveal=False
+        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+            yield parse.file_content.CommentMatch(
+                severity=notices.NoteSeverity(),
+                is_error=False,
+                is_note=False,
+                is_reveal=False,
+                is_whole_line=True,
             )
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)

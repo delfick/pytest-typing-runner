@@ -24,6 +24,18 @@ class InvalidInstruction(InvalidLine):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
+class TooManyModifyLines(InvalidLine):
+    """
+    Raised when multiple ``modify_lines`` are produced for a single line
+    """
+
+    line: str
+
+    def __str__(self) -> str:
+        return f"Can only modify a line once for all collected comments: line='{self.line}'"
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class InvalidMypyOutputLine(InvalidLine):
     """
     Raised when an invalid line from mypy output is encountered

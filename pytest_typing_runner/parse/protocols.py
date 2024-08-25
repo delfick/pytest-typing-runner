@@ -106,6 +106,12 @@ class CommentMatch(Protocol):
         """
 
     @property
+    def is_whole_line(self) -> bool:
+        """
+        Whether this match is for the whole line
+        """
+
+    @property
     def severity(self) -> protocols.Severity:
         """
         The ``severity`` to use if this match adds a notice
@@ -125,7 +131,7 @@ class CommentMatch(Protocol):
 
 
 class CommentMatchMaker(Protocol):
-    def __call__(self, line: str, /) -> CommentMatch | None: ...
+    def __call__(self, line: str, /) -> Iterator[CommentMatch]: ...
 
 
 if TYPE_CHECKING:

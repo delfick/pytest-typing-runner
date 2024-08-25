@@ -36,6 +36,12 @@ class _ParsedLineAfter:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class CommentMatch:
+    """
+    Represents the information for a single comment containing an expected notice
+
+    Implementation of :protocol:`pytest_typing_runner.interpert.protocols.CommentMatch`
+    """
+
     severity: protocols.Severity
 
     msg: str = ""
@@ -44,12 +50,28 @@ class CommentMatch:
     is_reveal: bool = False
     is_error: bool = False
     is_note: bool = False
+    is_whole_line: bool = False
 
     modify_lines: parse_protocols.ModifyParsedLineBefore | None = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class InstructionMatch(CommentMatch):
+    """
+    Represents the information for a single instruction comment
+
+    Implementation of :protocol:`pytest_typing_runner.interpert.protocols.CommentMatch`
+
+    Will match the following forms:
+    * "# ^ NAME[name] ^"
+    * "# ^ REVEAL ^ <builtins.int>"
+    * "# ^ REVEAL[name] ^ <builtins.int>"
+    * "# ^ NOTE ^ some note"
+    * "# ^ NOTE[name] ^ some note"
+    * "# ^ ERROR(error-type) ^ some error"
+    * "# ^ ERROR(error-type)[name] ^ some error"
+    """
+
     class _Instruction(enum.Enum):
         NAME = "NAME"
         REVEAL = "REVEAL"
@@ -98,7 +120,7 @@ class InstructionMatch(CommentMatch):
         return InstructionParser(parser=cls.match).parse
 
     @classmethod
-    def match(cls, line: str) -> Self | None:
+    def match(cls, line: str) -> Iterator[Self]:
         m = cls.instruction_regex.match(line)
         if m is None:
             if cls.potential_instruction_regex.match(line):
@@ -107,7 +129,7 @@ class InstructionMatch(CommentMatch):
                     line=line,
                 )
 
-            return None
+            return
 
         gd = m.groupdict()
         prefix_whitespace = gd["prefix_whitespace"]
@@ -136,12 +158,13 @@ class InstructionMatch(CommentMatch):
 
         match instruction:
             case cls._Instruction.NAME:
-                return cls(names=names, severity=notices.NoteSeverity())
+                yield cls(names=names, severity=notices.NoteSeverity(), is_whole_line=True)
             case cls._Instruction.REVEAL:
-                return cls(
+                yield cls(
                     names=names,
                     is_reveal=True,
                     is_note=True,
+                    is_whole_line=True,
                     severity=notices.NoteSeverity(),
                     msg=notices.ProgramNotice.reveal_msg(rest),
                     modify_lines=functools.partial(
@@ -149,16 +172,18 @@ class InstructionMatch(CommentMatch):
                     ),
                 )
             case cls._Instruction.ERROR:
-                return cls(
+                yield cls(
                     names=names,
                     is_error=True,
+                    is_whole_line=True,
                     severity=notices.ErrorSeverity(error_type),
                     msg=rest,
                 )
             case cls._Instruction.NOTE:
-                return cls(
+                yield cls(
                     names=names,
                     is_note=True,
+                    is_whole_line=True,
                     severity=notices.NoteSeverity(),
                     msg=rest,
                 )
@@ -174,52 +199,67 @@ class InstructionParser:
         self, before: parse_protocols.ParsedLineBefore, /
     ) -> parse_protocols.ParsedLineAfter:
         line = before.lines[-1]
-        match = self.parser(line)
-        if match is None:
+        matches = list(self.parser(line))
+        if not any(matches):
             return _ParsedLineAfter(
                 modify_lines=None, notice_changers=[], names=[], real_line=True
             )
 
-        changer: protocols.LineNoticesChanger | None = None
+        names: list[str] = []
+        changers: list[protocols.LineNoticesChanger] = []
+        modify_lines: parse_protocols.ModifyParsedLineBefore | None = None
 
-        if match.is_reveal:
-            changer = notice_changers.AppendToLine(
-                notices_maker=lambda line_notices: [
-                    line_notices.generate_notice(severity=match.severity, msg=match.msg)
-                ]
-            )
-        elif match.is_error:
-            changer = notice_changers.AppendToLine(
-                notices_maker=lambda line_notices: [
-                    line_notices.generate_notice(severity=match.severity, msg=match.msg)
-                ]
-            )
-        elif match.is_note:
-            skip: bool = False
+        for match in matches:
+            names.extend(match.names)
+            if match.modify_lines:
+                if modify_lines is not None:
+                    raise parse_errors.TooManyModifyLines(line=line)
+                modify_lines = match.modify_lines
 
-            def matcher(notice: protocols.ProgramNotice, /) -> bool:
-                nonlocal skip
-                if skip:
-                    return False
-                if notice.severity == notices.ErrorSeverity("") or notice.is_type_reveal:
-                    skip = True
-                    return False
-                return notice.severity == notices.NoteSeverity()
+            if match.is_reveal:
+                changers.append(
+                    notice_changers.AppendToLine(
+                        notices_maker=lambda line_notices: [
+                            line_notices.generate_notice(severity=match.severity, msg=match.msg)
+                        ]
+                    )
+                )
+            elif match.is_error:
+                changers.append(
+                    notice_changers.AppendToLine(
+                        notices_maker=lambda line_notices: [
+                            line_notices.generate_notice(severity=match.severity, msg=match.msg)
+                        ]
+                    )
+                )
+            elif match.is_note:
+                skip: bool = False
 
-            changer = notice_changers.ModifyLatestMatch(
-                must_exist=False,
-                matcher=matcher,
-                change=lambda notice: notice.clone(
-                    severity=match.severity,
-                    msg="\n".join([*(() if not notice.msg else (notice.msg,)), match.msg]),
-                ),
-            )
+                def matcher(notice: protocols.ProgramNotice, /) -> bool:
+                    nonlocal skip
+                    if skip:
+                        return False
+                    if notice.severity == notices.ErrorSeverity("") or notice.is_type_reveal:
+                        skip = True
+                        return False
+                    return notice.severity == notices.NoteSeverity()
+
+                changers.append(
+                    notice_changers.ModifyLatestMatch(
+                        must_exist=False,
+                        matcher=matcher,
+                        change=lambda notice: notice.clone(
+                            severity=match.severity,
+                            msg="\n".join([*(() if not notice.msg else (notice.msg,)), match.msg]),
+                        ),
+                    )
+                )
 
         return _ParsedLineAfter(
-            real_line=False,
-            names=match.names,
-            notice_changers=() if changer is None else (changer,),
-            modify_lines=match.modify_lines,
+            real_line=any(not match.is_whole_line for match in matches),
+            names=names,
+            notice_changers=changers,
+            modify_lines=modify_lines,
         )
 
 
