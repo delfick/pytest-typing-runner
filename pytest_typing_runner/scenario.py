@@ -181,7 +181,7 @@ class Scenario:
     def parse_notices_from_file(
         self, content: str, /, *, into: protocols.FileNotices
     ) -> tuple[str, protocols.FileNotices]:
-        return interpret.FileContent.parse(textwrap.dedent(content), into=into)
+        return interpret.FileContent().parse(textwrap.dedent(content), into=into)
 
     def normalise_program_runner_notice(
         self: protocols.T_Scenario,

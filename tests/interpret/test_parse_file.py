@@ -138,13 +138,13 @@ class TestParseNotices:
             name_to_line_number={"one": 3, "two": 11, "three": 14, "four": 18, "five": 23},
         )
 
-        replaced, parsed = interpret.FileContent.parse(
+        replaced, parsed = interpret.FileContent().parse(
             original, into=notices.FileNotices(location=location)
         )
         assert replaced == transformed
         assert parsed == expected
 
         # And can run again with no further changes
-        replaced, parsed = interpret.FileContent.parse(replaced, into=parsed)
+        replaced, parsed = interpret.FileContent().parse(replaced, into=parsed)
         assert replaced == transformed
         assert parsed == expected
