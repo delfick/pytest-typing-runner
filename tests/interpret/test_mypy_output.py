@@ -10,7 +10,7 @@ from pytest_typing_runner import interpret, notices
 class TestMypyOutput:
     class TestLineMatch:
         def test_it_complains_if_severity_is_not_note_or_error(self) -> None:
-            with pytest.raises(interpret.UnknownSeverity) as e:
+            with pytest.raises(interpret.errors.UnknownSeverity) as e:
                 interpret.MypyOutput._LineMatch.match(
                     'djangoexample/views.py:53: wat: Revealed type is "djangoexample.exampleapp.models.Child2QuerySet"'
                 )
@@ -84,7 +84,7 @@ class TestMypyOutput:
             mainsfd .py:7: note
             """)
 
-            with pytest.raises(interpret.InvalidMypyOutputLine) as e:
+            with pytest.raises(interpret.errors.InvalidMypyOutputLine) as e:
                 interpret.MypyOutput.parse(
                     mypy_output.strip().split("\n"),
                     normalise=lambda notice: notice,
