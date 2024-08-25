@@ -15,7 +15,7 @@ from . import protocols as parse_protocols
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class _ParsedLineBefore:
     """
-    Implementation of :protocol:`pytest_typing_runner.interpert.protocols.ParsedLineBefore`
+    Implementation of :protocol:`pytest_typing_runner.parse.protocols.ParsedLineBefore`
     """
 
     lines: MutableSequence[str]
@@ -25,7 +25,7 @@ class _ParsedLineBefore:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class _ParsedLineAfter:
     """
-    Implementation of :protocol:`pytest_typing_runner.interpert.protocols.ParsedLineAfter`
+    Implementation of :protocol:`pytest_typing_runner.parse.protocols.ParsedLineAfter`
     """
 
     names: Sequence[str]
@@ -39,7 +39,7 @@ class CommentMatch:
     """
     Represents the information for a single comment containing an expected notice
 
-    Implementation of :protocol:`pytest_typing_runner.interpert.protocols.CommentMatch`
+    Implementation of :protocol:`pytest_typing_runner.parse.protocols.CommentMatch`
     """
 
     severity: protocols.Severity
@@ -60,16 +60,17 @@ class InstructionMatch(CommentMatch):
     """
     Represents the information for a single instruction comment
 
-    Implementation of :protocol:`pytest_typing_runner.interpert.protocols.CommentMatch`
+    Implementation of :protocol:`pytest_typing_runner.parse.protocols.CommentMatch`
 
     Will match the following forms:
-    * "# ^ NAME[name] ^"
-    * "# ^ REVEAL ^ <builtins.int>"
-    * "# ^ REVEAL[name] ^ <builtins.int>"
-    * "# ^ NOTE ^ some note"
-    * "# ^ NOTE[name] ^ some note"
-    * "# ^ ERROR(error-type) ^ some error"
-    * "# ^ ERROR(error-type)[name] ^ some error"
+
+    * ``# ^ NAME[name] ^``
+    * ``# ^ REVEAL ^ <builtins.int>``
+    * ``# ^ REVEAL[name] ^ <builtins.int>``
+    * ``# ^ NOTE ^ some note``
+    * ``# ^ NOTE[name] ^ some note``
+    * ``# ^ ERROR(error-type) ^ some error``
+    * ``# ^ ERROR(error-type)[name] ^ some error``
     """
 
     class _Instruction(enum.Enum):
@@ -117,10 +118,39 @@ class InstructionMatch(CommentMatch):
 
     @classmethod
     def make_parser(cls) -> parse_protocols.LineParser:
+        """
+        Yield a parser for parsing a line.
+
+        Wraps :func:`match` with a :class:`InstructionParser`
+        """
         return InstructionParser(parser=cls.match).parse
 
     @classmethod
     def match(cls, line: str) -> Iterator[Self]:
+        """
+        Yield a comment match for lines that match an instruction
+
+        Implementation of :protocol:`pytest_typing_runner.parse.protocols.CommentMatchMaker`
+
+        This will make sure:
+
+        * No match yields no comment matches
+        * ERROR instruction must have an error type
+        * Only ERROR instructions have an error type
+        * NAME instructions must have a name
+        * NAME instructions sets none of the ``is_xxx`` properties
+        * ERROR instructions sets ``is_error=True``
+        * REVEAL instructions sets ``is_reveal=True`` and ``is_note=True``
+        * NOTE instructions sets ``is_note=True``
+        * All instructions set ``is_whole_line=True``
+
+        When a REVEAL instruction is found it will modify the line such that it is
+        preceded by a ``reveal_type(...)`` line.
+
+        * If the line is already a ``reveal_type`` then it is not changed
+        * If the line is an assignment, a line is added that does a ``reveal_type`` on the assigned variable
+        * Otherwise the line is wrapped in a ``reveal_type(...)`` call at the appropriate level of indentation
+        """
         m = cls.instruction_regex.match(line)
         if m is None:
             if cls.potential_instruction_regex.match(line):
@@ -193,11 +223,35 @@ class InstructionMatch(CommentMatch):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class InstructionParser:
+    """
+    Implements a wrapper around
+    a :protocol:`pytest_typing_runner.parse.protocols.CommentMatchMaker` parser
+    that will create the appropriate notice changers.
+    """
+
     parser: parse_protocols.CommentMatchMaker
 
     def parse(
         self, before: parse_protocols.ParsedLineBefore, /
     ) -> parse_protocols.ParsedLineAfter:
+        """
+        Will run the parser over the latest line and determine notice changers
+        and whether the line should be considered real.
+
+        * No matches produces a real line with no changes
+        * All names on matches get passed along
+        * If there are multiple matches with a ``modify_lines`` an error is raised
+        * If there is a ``modify_lines`` it is passed along
+        * ``is_reveal=True`` results in appending a type reveal to the notices
+        * ``is_error=True`` results in appending a notice with the severity and msg
+          from the match
+        * ``is_note=True`` and ``is_reveal=False`` will result in a note notice
+          either being appended to the end of the line, or added to the latest
+          notice if that notice is a non reveal note.
+        * The line is considered real if none of the matches are for the whole line
+
+        Implementation of :protocol:`pytest_typing_runner.parse.protocols.LineParser`
+        """
         line = before.lines[-1]
         matches = list(self.parser(line))
         if not any(matches):
@@ -265,6 +319,18 @@ class InstructionParser:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class FileContent:
+    """
+    Used to take some content and return a transformed copy with the notices
+    that were extracted.
+
+    :param parsers:
+        Optional sequence of :protocol:`pytest_typing_runner.parse.protocols.LineParser`
+        objects.
+
+        Defaults to using one parser:
+        * :class:`pytest_typing_runner.parse.file_content.InstructionMatch.make_parser`
+    """
+
     parsers: Sequence[parse_protocols.LineParser] = dataclasses.field(
         default_factory=lambda: (InstructionMatch.make_parser(),)
     )
@@ -288,6 +354,23 @@ class FileContent:
     def parse(
         self, content: str, /, *, into: protocols.FileNotices
     ) -> tuple[str, protocols.FileNotices]:
+        """
+        For each line in the content run the ``parsers`` over the line to
+        determine what changes to make and what notices will result from
+        running the type checker over this file.
+
+        No files will be modified by this function and the transformed string
+        should be written to the file by the user of this function.
+
+        Implementation of :protocol:`pytest_typing_runner.protocols.FileNoticesParser`
+
+        :param content: The content to parse
+        :param into: The file notices to add notices to
+        :raises parse_errors.InvalidLine:
+            By the parsers when they encounter strange input
+        :returns:
+            A tuple of the transformed content and the changed file notices.
+        """
         line_number = 0
         result: list[str] = [""]
         file_notices = into.clear(clear_names=True)
