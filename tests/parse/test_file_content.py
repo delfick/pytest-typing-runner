@@ -1,6 +1,7 @@
 import pathlib
 import textwrap
 
+import pytest
 from pytest_typing_runner_test_driver import matchers
 
 from pytest_typing_runner import notices, parse, protocols
@@ -10,8 +11,20 @@ def _without_line_numbers(content: str) -> str:
     return "\n".join(line[4:] for line in textwrap.dedent(content).strip().split("\n"))
 
 
-class TestParseNotices:
-    def test_it_can_replace_code_when_reveal_is_found(self, tmp_path: pathlib.Path) -> None:
+class TestInstructionMatch:
+    @pytest.fixture
+    def instruction_parser(self) -> parse.protocols.LineParser:
+        return parse.file_content.InstructionMatch.make_parser()
+
+    @pytest.fixture
+    def parser(
+        self, instruction_parser: parse.protocols.LineParser
+    ) -> protocols.FileNoticesParser:
+        return parse.FileContent(parsers=(instruction_parser,)).parse
+
+    def test_it_can_parse_whole_file_with_reveals_that_change_the_file(
+        self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
+    ) -> None:
         original = _without_line_numbers("""
         01:
         02: model: type[Leader] = Follow1
@@ -134,13 +147,11 @@ class TestParseNotices:
                 *notices_at_23,
             ]
 
-        replaced, parsed = parse.FileContent().parse(
-            original, into=notices.FileNotices(location=location)
-        )
+        replaced, parsed = parser(original, into=notices.FileNotices(location=location))
         assert replaced == transformed
         assertExpected(parsed)
 
         # And can run again with no further changes
-        replaced, parsed = parse.FileContent().parse(replaced, into=parsed)
+        replaced, parsed = parser(replaced, into=parsed)
         assert replaced == transformed
         assertExpected(parsed)

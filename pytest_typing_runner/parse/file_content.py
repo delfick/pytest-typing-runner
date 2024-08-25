@@ -95,6 +95,10 @@ class InstructionMatch:
         return 0
 
     @classmethod
+    def make_parser(cls) -> parse_protocols.LineParser:
+        return InstructionParser(parser=cls.match).parse
+
+    @classmethod
     def match(cls, line: str) -> Self | None:
         m = cls.instruction_regex.match(line)
         if m is None:
@@ -214,7 +218,7 @@ class InstructionParser:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class FileContent:
     parsers: Sequence[parse_protocols.LineParser] = dataclasses.field(
-        default_factory=lambda: (InstructionParser(parser=InstructionMatch.match).parse,)
+        default_factory=lambda: (InstructionMatch.make_parser(),)
     )
 
     def parse(
