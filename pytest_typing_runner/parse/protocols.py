@@ -1,4 +1,4 @@
-from collections.abc import MutableSequence, Sequence
+from collections.abc import Iterator, MutableSequence, Sequence
 from typing import TYPE_CHECKING, Protocol
 
 from .. import protocols
@@ -22,6 +22,19 @@ class ParsedLineBefore(Protocol):
         """
 
 
+class ModifyParsedLineBefore(Protocol):
+    """
+    Used to modify the lines that came before the comment match
+
+    If it yields no lines, then no changes are made.
+
+    If it does yield lines then the line at ``line_number_for_line`` are replaced
+    with the lines that were iterated.
+    """
+
+    def __call__(self, *, before: ParsedLineBefore) -> Iterator[str]: ...
+
+
 class ParsedLineAfter(Protocol):
     """
     The changes to make to a line after all comments have been parsed
@@ -42,10 +55,9 @@ class ParsedLineAfter(Protocol):
         """
 
     @property
-    def line_number_adjustment(self) -> int:
+    def modify_lines(self) -> ModifyParsedLineBefore | None:
         """
-        The amount to adjust the ``line_number`` and ``line_number_for_name`` before
-        the comment is parsed by the next line parser.
+        Function to modify the line at ``line_number_for_name``
         """
 
     @property
@@ -65,16 +77,6 @@ class LineParser(Protocol):
     """
 
     def __call__(self, before: ParsedLineBefore, /) -> ParsedLineAfter: ...
-
-
-class ModifyParsedLineBefore(Protocol):
-    """
-    Used to modify the lines that came before the comment match
-
-    Must return the amount to move the ``line_number_for_name``
-    """
-
-    def __call__(self, *, before: ParsedLineBefore) -> int: ...
 
 
 class CommentMatch(Protocol):

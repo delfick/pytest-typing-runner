@@ -4,7 +4,7 @@ import pathlib
 import re
 import textwrap
 import types
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import ClassVar
 
 import pytest
@@ -81,7 +81,7 @@ class TestInstructionMatch:
                 assert o.keywords == {"prefix_whitespace": self.prefix_whitespace}
                 return True
 
-            def __call__(self, *, before: parse.protocols.ParsedLineBefore) -> int:
+            def __call__(self, *, before: parse.protocols.ParsedLineBefore) -> Iterator[str]:
                 raise NotImplementedError()
 
         assert parse.file_content.InstructionMatch.match(
@@ -189,30 +189,25 @@ class TestInstructionParser:
             return None
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
-        assert after.line_number_adjustment == 0
+        assert after.modify_lines is None
         assert after.notice_changers == []
         assert after.names == []
         assert after.real_line
 
     @pytest.mark.parametrize("match", example_comment_matches)
-    def test_it_uses_found_modify_lines(self, match: parse.protocols.CommentMatch) -> None:
+    def test_passes_on_modify_lines(self, match: parse.protocols.CommentMatch) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        called: list[parse.protocols.ParsedLineBefore] = []
-
-        def modify_lines(*, before: parse.protocols.ParsedLineBefore) -> int:
-            called.append(before)
-            return 20
+        def modify_lines(*, before: parse.protocols.ParsedLineBefore) -> Iterator[str]:
+            yield ""
 
         def parser(line: str, /) -> parse.protocols.CommentMatch | None:
             assert isinstance(match, parse.file_content.CommentMatch)
             return dataclasses.replace(match, modify_lines=modify_lines)
 
-        assert called == []
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
-        assert called == [before]
 
-        assert after.line_number_adjustment == 20
+        assert after.modify_lines is modify_lines
         assert not after.real_line
 
     @pytest.mark.parametrize("match", example_comment_matches)
@@ -225,7 +220,7 @@ class TestInstructionParser:
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
 
-        assert after.line_number_adjustment == 0
+        assert after.modify_lines is None
         assert after.names == ["one"]
         assert not after.real_line
 
@@ -243,7 +238,7 @@ class TestInstructionParser:
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
 
-        assert after.line_number_adjustment == 0
+        assert after.modify_lines is None
         assert after.names == ["two"]
         assert not after.real_line
 
@@ -269,7 +264,7 @@ class TestInstructionParser:
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
 
-        assert after.line_number_adjustment == 0
+        assert after.modify_lines is None
         assert after.names == ["two"]
         assert not after.real_line
         assert len(after.notice_changers) == 1
@@ -392,7 +387,7 @@ class TestInstructionParser:
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
 
-        assert after.line_number_adjustment == 0
+        assert after.modify_lines is None
         assert after.names == ["three"]
         assert not after.real_line
 
@@ -421,10 +416,120 @@ class TestInstructionParser:
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
 
-        assert after.line_number_adjustment == 0
+        assert after.modify_lines is None
         assert list(after.names) == []
         assert not after.notice_changers
         assert not after.real_line
+
+
+class TestFileContentModify:
+    def test_it_makes_no_change_if_no_modified(self) -> None:
+        file_content = parse.FileContent()
+
+        lines = _without_line_numbers("""
+        01: reveal_type(a)
+        02: # ^ REVEAL ^ things"
+        """).split("\n")
+        lines.insert(0, "")
+
+        modified: list[str] = []
+
+        line_number, line_number_for_name = file_content._modify(
+            lines=["", *lines], modified=modified, line_number=2, line_number_for_name=1
+        )
+
+        expected = _without_line_numbers("""
+        01: reveal_type(a)
+        02: # ^ REVEAL ^ things"
+        """).split("\n")
+
+        assert lines == ["", *expected]
+        assert (line_number, line_number_for_name) == (2, 1)
+
+    def test_it_makes_no_change_if_only_changes_one_line(self) -> None:
+        file_content = parse.FileContent()
+
+        lines = _without_line_numbers("""
+        01: a
+        02: # ^ REVEAL ^ things"
+        """).split("\n")
+        lines.insert(0, "")
+
+        modified = [
+            "reveal_type(a)",
+        ]
+
+        line_number, line_number_for_name = file_content._modify(
+            lines=lines, modified=modified, line_number=2, line_number_for_name=1
+        )
+
+        expected = _without_line_numbers("""
+        01: reveal_type(a)
+        02: # ^ REVEAL ^ things"
+        """).split("\n")
+        assert lines == ["", *expected]
+        assert (line_number, line_number_for_name) == (2, 1)
+
+    def test_it_can_modify_simple(self) -> None:
+        file_content = parse.FileContent()
+
+        lines = _without_line_numbers("""
+        01: a: int = 1
+        02: # ^ REVEAL ^ things"
+        """).split("\n")
+        lines.insert(0, "")
+
+        modified = [
+            "a: int = 1",
+            "reveal_type(a)",
+        ]
+
+        line_number, line_number_for_name = file_content._modify(
+            lines=lines, modified=modified, line_number=2, line_number_for_name=1
+        )
+
+        expected = _without_line_numbers("""
+        01: a: int = 1
+        02: reveal_type(a)
+        03: # ^ REVEAL ^ things"
+        """).split("\n")
+        assert lines == ["", *expected]
+        assert (line_number, line_number_for_name) == (3, 2)
+
+    def test_it_can_modify_and_move_previous_lines(self) -> None:
+        file_content = parse.FileContent()
+
+        lines = _without_line_numbers("""
+        01: c
+        02: a: int = 1
+        03: # ^ NOTE ^ things
+        04: # ^ ERROR(arg-type) ^ other
+        05: # ^ REVEAL ^ things
+        06: b
+        """).split("\n")
+        lines.insert(0, "")
+
+        modified = [
+            "a: int = 1",
+            "reveal_type(a)",
+        ]
+
+        line_number, line_number_for_name = file_content._modify(
+            lines=lines, modified=modified, line_number=5, line_number_for_name=2
+        )
+
+        expected = _without_line_numbers("""
+        01: c
+        02: a: int = 1
+        03: # ^ NOTE ^ things
+        04: # ^ ERROR(arg-type) ^ other
+        05: reveal_type(a)
+        06: # ^ REVEAL ^ things
+        07: b
+        """).split("\n")
+
+        assert lines == ["", *expected]
+        assert (line_number, line_number_for_name) == (6, 5)
 
 
 class TestFileContent:
@@ -825,8 +930,8 @@ class TestFileContent:
         06: # ^ ERROR(assignment) ^ another
         07: 
         08: a: int = "asdf"
-        09: # ^ REVEAL ^ stuff
-        10: # ^ ERROR(assignment) ^ other
+        09: # ^ ERROR(assignment) ^ other
+        10: # ^ REVEAL ^ stuff
         11: # ^ NOTE ^ one
         12: # ^ NOTE ^ two
         13: # ^ NOTE ^ three
@@ -840,9 +945,9 @@ class TestFileContent:
         21:
         22: if True:
         23:     reveal_type(found)
-        24:     # ^ REVEAL[other] ^ asdf
-        25:     # ^ REVEAL ^ asdf2
-        26:     # ^ ERROR(arg-type)[other] ^ hi
+        24:     # ^ ERROR(arg-type)[other] ^ hi
+        25:     # ^ REVEAL[other] ^ asdf
+        26:     # ^ REVEAL ^ asdf2
         27:     # ^ ERROR(arg-type)[other] ^ hi
         """)
 
@@ -859,9 +964,9 @@ class TestFileContent:
         07: # ^ ERROR(assignment) ^ another
         08: 
         09: a: int = "asdf"
-        10: reveal_type(a)
-        11: # ^ REVEAL ^ stuff
-        12: # ^ ERROR(assignment) ^ other
+        10: # ^ ERROR(assignment) ^ other
+        11: reveal_type(a)
+        12: # ^ REVEAL ^ stuff
         13: # ^ NOTE ^ one
         14: # ^ NOTE ^ two
         15: # ^ NOTE ^ three
@@ -875,14 +980,14 @@ class TestFileContent:
         23:
         24: if True:
         25:     reveal_type(found)
-        26:     # ^ REVEAL[other] ^ asdf
-        27:     # ^ REVEAL ^ asdf2
-        28:     # ^ ERROR(arg-type)[other] ^ hi
+        26:     # ^ ERROR(arg-type)[other] ^ hi
+        27:     # ^ REVEAL[other] ^ asdf
+        28:     # ^ REVEAL ^ asdf2
         29:     # ^ ERROR(arg-type)[other] ^ hi
         """)
 
         def assertExpected(file_notices: protocols.FileNotices) -> None:
-            assert list(file_notices.known_line_numbers()) == [3, 10, 20, 25]
+            assert list(file_notices.known_line_numbers()) == [3, 9, 11, 20, 25]
             assert file_notices.known_names == {"one": 3, "hi": 20, "other": 25}
 
             notices_at_3 = [
@@ -906,30 +1011,32 @@ class TestFileContent:
                     msg="another",
                 ),
             ]
-            notices_at_10 = [
-                matchers.MatchNote(
-                    location=location, line_number=10, msg='Revealed type is "stuff"'
-                ),
+            notices_at_9 = [
                 matchers.MatchNotice(
                     location=location,
-                    line_number=10,
+                    line_number=9,
                     severity=notices.ErrorSeverity("assignment"),
                     msg="other",
+                )
+            ]
+            notices_at_11 = [
+                matchers.MatchNote(
+                    location=location, line_number=11, msg='Revealed type is "stuff"'
                 ),
                 matchers.MatchNote(
                     location=location,
-                    line_number=10,
+                    line_number=11,
                     msg="one\ntwo\nthree",
                 ),
                 matchers.MatchNotice(
                     location=location,
-                    line_number=10,
+                    line_number=11,
                     severity=notices.ErrorSeverity("assignment"),
                     msg="another",
                 ),
                 matchers.MatchNote(
                     location=location,
-                    line_number=10,
+                    line_number=11,
                     msg="four",
                 ),
             ]
@@ -942,6 +1049,12 @@ class TestFileContent:
                 ),
             ]
             notices_at_25 = [
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=25,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="hi",
+                ),
                 matchers.MatchNote(
                     location=location, line_number=25, msg='Revealed type is "asdf"'
                 ),
@@ -954,21 +1067,17 @@ class TestFileContent:
                     severity=notices.ErrorSeverity("arg-type"),
                     msg="hi",
                 ),
-                matchers.MatchNotice(
-                    location=location,
-                    line_number=25,
-                    severity=notices.ErrorSeverity("arg-type"),
-                    msg="hi",
-                ),
             ]
 
             assert list(file_notices.notices_at_line(3) or []) == notices_at_3
-            assert list(file_notices.notices_at_line(10) or []) == notices_at_10
+            assert list(file_notices.notices_at_line(9) or []) == notices_at_9
+            assert list(file_notices.notices_at_line(11) or []) == notices_at_11
             assert list(file_notices.notices_at_line(20) or []) == notices_at_20
             assert list(file_notices.notices_at_line(25) or []) == notices_at_25
             assert list(file_notices) == [
                 *notices_at_3,
-                *notices_at_10,
+                *notices_at_9,
+                *notices_at_11,
                 *notices_at_20,
                 *notices_at_25,
             ]

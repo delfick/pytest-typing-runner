@@ -2,7 +2,7 @@ import dataclasses
 import enum
 import functools
 import re
-from collections.abc import MutableSequence, Sequence
+from collections.abc import Iterator, MutableSequence, Sequence
 from typing import TYPE_CHECKING, ClassVar, cast
 
 from typing_extensions import Self, assert_never
@@ -31,7 +31,7 @@ class _ParsedLineAfter:
     names: Sequence[str]
     real_line: bool
     notice_changers: Sequence[protocols.LineNoticesChanger]
-    line_number_adjustment: int
+    modify_lines: parse_protocols.ModifyParsedLineBefore | None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -81,23 +81,17 @@ class InstructionMatch(CommentMatch):
     reveal_regex: ClassVar[re.Pattern[str]] = re.compile(r"^\s*reveal_type\([^\)]+")
 
     @classmethod
-    def _modify_for_reveal(cls, *, prefix_whitespace: str, before: _ParsedLineBefore) -> int:
+    def _modify_for_reveal(
+        cls, *, prefix_whitespace: str, before: _ParsedLineBefore
+    ) -> Iterator[str]:
         previous_line = before.lines[before.line_number_for_name].strip()
         if not cls.reveal_regex.match(previous_line):
             m = cls.assignment_regex.match(previous_line)
             if m:
-                before.lines.insert(
-                    before.line_number_for_name + 1,
-                    f"{prefix_whitespace}reveal_type({m.groupdict()['var_name']})",
-                )
-
-                return 1
+                yield f"{prefix_whitespace}{previous_line}"
+                yield f"{prefix_whitespace}reveal_type({m.groupdict()['var_name']})"
             else:
-                before.lines[before.line_number_for_name] = (
-                    f"{prefix_whitespace}reveal_type({previous_line})"
-                )
-
-        return 0
+                yield f"{prefix_whitespace}reveal_type({previous_line})"
 
     @classmethod
     def make_parser(cls) -> parse_protocols.LineParser:
@@ -183,14 +177,10 @@ class InstructionParser:
         match = self.parser(line)
         if match is None:
             return _ParsedLineAfter(
-                line_number_adjustment=0, notice_changers=[], names=[], real_line=True
+                modify_lines=None, notice_changers=[], names=[], real_line=True
             )
 
         changer: protocols.LineNoticesChanger | None = None
-        line_number_adjustment = 0
-
-        if match.modify_lines:
-            line_number_adjustment = match.modify_lines(before=before)
 
         if match.is_reveal:
             changer = notice_changers.AppendToLine(
@@ -229,7 +219,7 @@ class InstructionParser:
             real_line=False,
             names=match.names,
             notice_changers=() if changer is None else (changer,),
-            line_number_adjustment=line_number_adjustment,
+            modify_lines=match.modify_lines,
         )
 
 
@@ -238,6 +228,22 @@ class FileContent:
     parsers: Sequence[parse_protocols.LineParser] = dataclasses.field(
         default_factory=lambda: (InstructionMatch.make_parser(),)
     )
+
+    def _modify(
+        self, *, lines: list[str], modified: list[str], line_number: int, line_number_for_name: int
+    ) -> tuple[int, int]:
+        if len(modified) > 0:
+            lines[line_number_for_name] = modified.pop(0)
+
+        if modified:
+            diff = len(modified)
+            while modified:
+                lines.insert(line_number, modified.pop(0))
+
+            line_number_for_name = line_number - 1 + diff
+            line_number += diff
+
+        return line_number, line_number_for_name
 
     def parse(
         self, content: str, /, *, into: protocols.FileNotices
@@ -256,13 +262,18 @@ class FileContent:
             for parser in self.parsers:
                 before = _ParsedLineBefore(lines=result, line_number_for_name=line_number_for_name)
                 after = parser(before)
-                afters.append(after)
                 if not after.real_line:
                     real_line = False
 
-                if after.line_number_adjustment:
-                    line_number_for_name += after.line_number_adjustment
-                    line_number += after.line_number_adjustment
+                if after.modify_lines:
+                    line_number, line_number_for_name = self._modify(
+                        lines=result,
+                        modified=list(after.modify_lines(before=before)),
+                        line_number=line_number,
+                        line_number_for_name=line_number_for_name,
+                    )
+
+                afters.append(after)
 
             if real_line:
                 line_number_for_name = line_number
