@@ -31,7 +31,7 @@ class _ParsedLineAfter:
     names: Sequence[str]
     real_line: bool
     notice_changers: Sequence[protocols.LineNoticesChanger]
-    line_number_for_name_adjustment: int
+    line_number_adjustment: int
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -173,14 +173,14 @@ class InstructionParser:
         match = self.parser(line)
         if match is None:
             return _ParsedLineAfter(
-                line_number_for_name_adjustment=0, notice_changers=[], names=[], real_line=True
+                line_number_adjustment=0, notice_changers=[], names=[], real_line=True
             )
 
         changer: protocols.LineNoticesChanger | None = None
-        line_number_for_name_adjustment = 0
+        line_number_adjustment = 0
 
         if match.modify_lines:
-            line_number_for_name_adjustment = match.modify_lines(before=before)
+            line_number_adjustment = match.modify_lines(before=before)
 
         if match.is_reveal:
             changer = notice_changers.AppendToLine(
@@ -207,7 +207,7 @@ class InstructionParser:
             real_line=False,
             names=match.names,
             notice_changers=() if changer is None else (changer,),
-            line_number_for_name_adjustment=line_number_for_name_adjustment,
+            line_number_adjustment=line_number_adjustment,
         )
 
 
@@ -238,9 +238,9 @@ class FileContent:
                 if not after.real_line:
                     real_line = False
 
-                if after.line_number_for_name_adjustment:
-                    line_number_for_name += after.line_number_for_name_adjustment
-                    line_number += after.line_number_for_name_adjustment
+                if after.line_number_adjustment:
+                    line_number_for_name += after.line_number_adjustment
+                    line_number += after.line_number_adjustment
 
             if real_line:
                 line_number_for_name = line_number

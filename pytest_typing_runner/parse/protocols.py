@@ -42,10 +42,10 @@ class ParsedLineAfter(Protocol):
         """
 
     @property
-    def line_number_for_name_adjustment(self) -> int:
+    def line_number_adjustment(self) -> int:
         """
-        The amount to adjust the ``line_number_for_name`` line. This is used
-        before the next comment parser is used
+        The amount to adjust the ``line_number`` and ``line_number_for_name`` before
+        the comment is parsed by the next line parser.
         """
 
     @property
