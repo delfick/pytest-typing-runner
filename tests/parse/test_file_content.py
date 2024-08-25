@@ -1,26 +1,683 @@
+import dataclasses
+import functools
 import pathlib
+import re
 import textwrap
+import types
+from collections.abc import Sequence
+from typing import ClassVar
 
 import pytest
 from pytest_typing_runner_test_driver import matchers
 
-from pytest_typing_runner import notices, parse, protocols
+from pytest_typing_runner import notice_changers, notices, parse, protocols
 
 
 def _without_line_numbers(content: str) -> str:
-    return "\n".join(line[4:] for line in textwrap.dedent(content).strip().split("\n"))
+    line_number = 0
+    result: list[str] = []
+
+    for line in textwrap.dedent(content).strip().split("\n"):
+        m = re.match(r"^0*(?P<line_number>\d+):( ?(?P<rest>.*))$", line)
+        assert m is not None, line
+        groups = m.groupdict()
+        found_line_number = int(groups["line_number"])
+        assert found_line_number == line_number + 1
+        line_number += 1
+        result.append(groups["rest"])
+
+    return "\n".join(result)
 
 
 class TestInstructionMatch:
-    @pytest.fixture
-    def instruction_parser(self) -> parse.protocols.LineParser:
-        return parse.file_content.InstructionMatch.make_parser()
+    def test_it_lets_through_non_instruction_lines(self) -> None:
+        for code_line in [
+            "",
+            "class Foo:",
+            "one: int = 1",
+            "def my_func():",
+            "# N: blah",
+            "# type-ignore[arg-type]",
+            "# stuff and things",
+        ]:
+            assert parse.file_content.InstructionMatch.match(code_line) is None
 
+    def test_it_complains_about_lines_that_look_like_instructions_but_are_not(self) -> None:
+        for invalid in [
+            "# ^ asdf",
+            "# ERROR ^",
+            "# ^ ERROR ^",
+            "# ^ note ^",
+            "# ^ note ^ asdf",
+        ]:
+            with pytest.raises(parse.errors.InvalidInstruction):
+                parse.file_content.InstructionMatch.match(invalid)
+
+    def test_it_captures_note_instructions(self) -> None:
+        assert parse.file_content.InstructionMatch.match(
+            "# ^ NOTE ^ hello"
+        ) == parse.file_content.InstructionMatch(
+            severity=notices.NoteSeverity(), msg="hello", is_note=True, names=[]
+        )
+
+        assert parse.file_content.InstructionMatch.match(
+            "# ^ NOTE[one] ^ hello"
+        ) == parse.file_content.InstructionMatch(
+            severity=notices.NoteSeverity(), msg="hello", is_note=True, names=["one"]
+        )
+
+    def test_it_captures_reveal_instructions(self) -> None:
+        class MatchModifyLines:
+            def __init__(self, *, prefix_whitespace: str) -> None:
+                self.prefix_whitespace = prefix_whitespace
+
+            def __eq__(self, o: object) -> bool:
+                assert isinstance(o, functools.partial)
+                assert isinstance(o.func, types.MethodType)
+                modify_func = modify_func = parse.file_content.InstructionMatch._modify_for_reveal
+                assert isinstance(modify_func, types.MethodType)
+                assert o.func.__func__ == modify_func.__func__
+                assert o.args == ()
+                assert o.keywords == {"prefix_whitespace": self.prefix_whitespace}
+                return True
+
+            def __call__(self, *, before: parse.protocols.ParsedLineBefore) -> int:
+                raise NotImplementedError()
+
+        assert parse.file_content.InstructionMatch.match(
+            "# ^ REVEAL ^ hello"
+        ) == parse.file_content.InstructionMatch(
+            severity=notices.NoteSeverity(),
+            msg='Revealed type is "hello"',
+            is_note=True,
+            is_reveal=True,
+            names=[],
+            modify_lines=MatchModifyLines(prefix_whitespace=""),
+        )
+
+        assert parse.file_content.InstructionMatch.match(
+            "# ^ REVEAL[two] ^ hello"
+        ) == parse.file_content.InstructionMatch(
+            severity=notices.NoteSeverity(),
+            msg='Revealed type is "hello"',
+            is_note=True,
+            is_reveal=True,
+            names=["two"],
+            modify_lines=MatchModifyLines(prefix_whitespace=""),
+        )
+
+        assert parse.file_content.InstructionMatch.match(
+            "    # ^ REVEAL[two] ^ hello"
+        ) == parse.file_content.InstructionMatch(
+            severity=notices.NoteSeverity(),
+            msg='Revealed type is "hello"',
+            is_note=True,
+            is_reveal=True,
+            names=["two"],
+            modify_lines=MatchModifyLines(prefix_whitespace="    "),
+        )
+
+    def test_it_captures_error_instructions(self) -> None:
+        assert parse.file_content.InstructionMatch.match(
+            "# ^ ERROR(arg-type) ^ hello"
+        ) == parse.file_content.InstructionMatch(
+            severity=notices.ErrorSeverity("arg-type"), msg="hello", is_error=True, names=[]
+        )
+
+        assert parse.file_content.InstructionMatch.match(
+            "# ^ ERROR(assignment)[three] ^ there"
+        ) == parse.file_content.InstructionMatch(
+            severity=notices.ErrorSeverity("assignment"),
+            msg="there",
+            is_error=True,
+            names=["three"],
+        )
+
+    def test_error_instructions_must_have_error_type(self) -> None:
+        with pytest.raises(parse.errors.InvalidInstruction) as e:
+            parse.file_content.InstructionMatch.match("# ^ ERROR ^ hello")
+
+        assert e.value.reason == "Must use `# ^ ERROR(error-type) ^` with the ERROR instruction"
+
+    def test_it_can_parse_name_instruction(self) -> None:
+        assert parse.file_content.InstructionMatch.match(
+            "# ^ NAME[one] ^"
+        ) == parse.file_content.InstructionMatch(severity=notices.NoteSeverity(), names=["one"])
+
+    def test_it_only_let_error_instructions_have_error_tag(self) -> None:
+        for invalid in [
+            "# ^ NAME(nup)[name] ^",
+            "# ^ NOTE(nup)[name] ^",
+            "# ^ REVEAL(nup)[name] ^",
+        ]:
+            with pytest.raises(parse.errors.InvalidInstruction) as e:
+                parse.file_content.InstructionMatch.match(invalid)
+            assert (
+                e.value.reason
+                == "Only Error instructions should be of the form 'INSTRUCTION(error_type)'"
+            )
+
+
+class TestInstructionParser:
+    example_comment_matches: ClassVar[Sequence[object]] = (
+        pytest.param(
+            parse.file_content.CommentMatch(
+                is_note=True, is_reveal=True, severity=notices.NoteSeverity()
+            ),
+            id="reveal",
+        ),
+        pytest.param(
+            parse.file_content.CommentMatch(is_note=True, severity=notices.NoteSeverity()),
+            id="note",
+        ),
+        pytest.param(
+            parse.file_content.CommentMatch(
+                is_error=True, severity=notices.ErrorSeverity("arg-type")
+            ),
+            id="error",
+        ),
+        pytest.param(
+            parse.file_content.CommentMatch(severity=notices.NoteSeverity()),
+            id="name",
+        ),
+    )
+
+    def test_it_makes_no_modification_if_no_comment_match(self) -> None:
+        before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
+
+        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
+            return None
+
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+        assert after.line_number_adjustment == 0
+        assert after.notice_changers == []
+        assert after.names == []
+        assert after.real_line
+
+    @pytest.mark.parametrize("match", example_comment_matches)
+    def test_it_uses_found_modify_lines(self, match: parse.protocols.CommentMatch) -> None:
+        before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
+
+        called: list[parse.protocols.ParsedLineBefore] = []
+
+        def modify_lines(*, before: parse.protocols.ParsedLineBefore) -> int:
+            called.append(before)
+            return 20
+
+        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
+            assert isinstance(match, parse.file_content.CommentMatch)
+            return dataclasses.replace(match, modify_lines=modify_lines)
+
+        assert called == []
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+        assert called == [before]
+
+        assert after.line_number_adjustment == 20
+        assert not after.real_line
+
+    @pytest.mark.parametrize("match", example_comment_matches)
+    def test_it_passes_on_names(self, match: parse.protocols.CommentMatch) -> None:
+        before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
+
+        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
+            assert isinstance(match, parse.file_content.CommentMatch)
+            return dataclasses.replace(match, names=["one"])
+
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+
+        assert after.line_number_adjustment == 0
+        assert after.names == ["one"]
+        assert not after.real_line
+
+    def test_it_adds_append_changer_for_reveal(self, tmp_path: pathlib.Path) -> None:
+        before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
+
+        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
+            return parse.file_content.CommentMatch(
+                severity=notices.NoteSeverity(),
+                msg=notices.ProgramNotice.reveal_msg("hi"),
+                names=["two"],
+                is_reveal=True,
+                is_note=True,
+            )
+
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+
+        assert after.line_number_adjustment == 0
+        assert after.names == ["two"]
+        assert not after.real_line
+
+        assert len(after.notice_changers) == 1
+        assert isinstance(after.notice_changers[0], notice_changers.AppendToLine)
+
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2)
+        assert list(line_notices) == []
+
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            matchers.MatchNote(
+                location=tmp_path, line_number=2, msg=notices.ProgramNotice.reveal_msg("hi")
+            )
+        ]
+
+    def test_it_adds_match_latest_matcher_for_note(self, tmp_path: pathlib.Path) -> None:
+        before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
+
+        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
+            return parse.file_content.CommentMatch(
+                severity=notices.NoteSeverity(), msg="stuff", names=["two"], is_note=True
+            )
+
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+
+        assert after.line_number_adjustment == 0
+        assert after.names == ["two"]
+        assert not after.real_line
+        assert len(after.notice_changers) == 1
+
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2)
+        assert list(line_notices) == []
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            matchers.MatchNote(location=tmp_path, line_number=2, msg="stuff")
+        ]
+
+        # Existing errors
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+        n1 = line_notices.generate_notice(severity=notices.ErrorSeverity("arg-type"), msg="error1")
+        n2 = line_notices.generate_notice(severity=notices.ErrorSeverity("arg-type"), msg="error2")
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2).set_notices(
+            [n1, n2], allow_empty=True
+        )
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            matchers.MatchNotice(
+                location=tmp_path,
+                line_number=2,
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="error1",
+            ),
+            matchers.MatchNotice(
+                location=tmp_path,
+                line_number=2,
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="error2",
+            ),
+            matchers.MatchNote(location=tmp_path, line_number=2, msg="stuff"),
+        ]
+
+        # Existing notes
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+        n1 = line_notices.generate_notice(severity=notices.ErrorSeverity("arg-type"), msg="error1")
+        n2 = line_notices.generate_notice(severity=notices.NoteSeverity(), msg="note1")
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2).set_notices(
+            [n1, n2], allow_empty=True
+        )
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            matchers.MatchNotice(
+                location=tmp_path,
+                line_number=2,
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="error1",
+            ),
+            matchers.MatchNote(location=tmp_path, line_number=2, msg="note1\nstuff"),
+        ]
+
+        # Existing reveal
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+        n1 = line_notices.generate_notice(severity=notices.ErrorSeverity("arg-type"), msg="error1")
+        n2 = line_notices.generate_notice(
+            severity=notices.NoteSeverity(), msg=notices.ProgramNotice.reveal_msg("hi")
+        )
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2).set_notices(
+            [n1, n2], allow_empty=True
+        )
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            matchers.MatchNotice(
+                location=tmp_path,
+                line_number=2,
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="error1",
+            ),
+            matchers.MatchNote(
+                location=tmp_path, line_number=2, msg=notices.ProgramNotice.reveal_msg("hi")
+            ),
+            matchers.MatchNote(location=tmp_path, line_number=2, msg="stuff"),
+        ]
+
+        # Existing note followed by reveal
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+        n1 = line_notices.generate_notice(severity=notices.NoteSeverity(), msg="one")
+        n2 = line_notices.generate_notice(
+            severity=notices.NoteSeverity(), msg=notices.ProgramNotice.reveal_msg("hi")
+        )
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2).set_notices(
+            [n1, n2], allow_empty=True
+        )
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            matchers.MatchNote(location=tmp_path, line_number=2, msg="one"),
+            matchers.MatchNote(
+                location=tmp_path, line_number=2, msg=notices.ProgramNotice.reveal_msg("hi")
+            ),
+            matchers.MatchNote(location=tmp_path, line_number=2, msg="stuff"),
+        ]
+
+        # Existing note followed by error
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+        n1 = line_notices.generate_notice(severity=notices.NoteSeverity(), msg="one")
+        n2 = line_notices.generate_notice(
+            severity=notices.ErrorSeverity("assignment"), msg="error"
+        )
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2).set_notices(
+            [n1, n2], allow_empty=True
+        )
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            matchers.MatchNote(location=tmp_path, line_number=2, msg="one"),
+            matchers.MatchNotice(
+                location=tmp_path,
+                line_number=2,
+                severity=notices.ErrorSeverity("assignment"),
+                msg="error",
+            ),
+            matchers.MatchNote(location=tmp_path, line_number=2, msg="stuff"),
+        ]
+
+    def test_it_adds_append_changer_for_error(self, tmp_path: pathlib.Path) -> None:
+        before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
+
+        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
+            return parse.file_content.CommentMatch(
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="error",
+                names=["three"],
+                is_error=True,
+            )
+
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+
+        assert after.line_number_adjustment == 0
+        assert after.names == ["three"]
+        assert not after.real_line
+
+        assert len(after.notice_changers) == 1
+        assert isinstance(after.notice_changers[0], notice_changers.AppendToLine)
+
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2)
+        assert list(line_notices) == []
+
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            matchers.MatchNotice(
+                location=tmp_path,
+                line_number=2,
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="error",
+            )
+        ]
+
+    def test_it_otherwise_adds_not_changers(self, tmp_path: pathlib.Path) -> None:
+        before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
+
+        def parser(line: str, /) -> parse.protocols.CommentMatch | None:
+            return parse.file_content.CommentMatch(
+                severity=notices.NoteSeverity(), is_error=False, is_note=False, is_reveal=False
+            )
+
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+
+        assert after.line_number_adjustment == 0
+        assert list(after.names) == []
+        assert not after.notice_changers
+        assert not after.real_line
+
+
+class TestFileContent:
     @pytest.fixture
-    def parser(
-        self, instruction_parser: parse.protocols.LineParser
-    ) -> protocols.FileNoticesParser:
-        return parse.FileContent(parsers=(instruction_parser,)).parse
+    def parser(self) -> protocols.FileNoticesParser:
+        return parse.FileContent().parse
+
+    def test_it_can_parse_empty_file(
+        self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
+    ) -> None:
+        original = ""
+
+        path = "fle.py"
+        location = tmp_path / path
+
+        def assertExpected(file_notices: protocols.FileNotices) -> None:
+            assert list(file_notices.known_line_numbers()) == []
+            assert file_notices.known_names == {}
+            assert list(file_notices) == []
+
+        replaced, parsed = parser(original, into=notices.FileNotices(location=location))
+        assert replaced == original
+        assertExpected(parsed)
+
+        # And can run again with no further changes
+        replaced, parsed = parser(replaced, into=parsed)
+        assert replaced == original
+        assertExpected(parsed)
+
+    def test_it_can_parse_file_with_no_instructions(
+        self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
+    ) -> None:
+        original = _without_line_numbers("""
+        01: model: type[Leader] = Follow1
+        02:
+        03: class Thing:
+        04:     def __init__(self, model: type[Leader]) -> None:
+        05:         self.model = model
+        06:
+        07: found = Concrete.cast_as_concrete(Thing(model=model).model)
+        08:
+        09: reveal_type(found)
+        10:
+        11: if True:
+        12:     reveal_type(found)
+        13:
+        14:     thing = Thing(model=model)
+        15:     found = Concrete.cast_as_concrete(thing.model)
+        """)
+
+        path = "fle.py"
+        location = tmp_path / path
+
+        def assertExpected(file_notices: protocols.FileNotices) -> None:
+            assert list(file_notices.known_line_numbers()) == []
+            assert file_notices.known_names == {}
+            assert list(file_notices) == []
+
+        replaced, parsed = parser(original, into=notices.FileNotices(location=location))
+        assert replaced == original
+        assertExpected(parsed)
+
+        # And can run again with no further changes
+        replaced, parsed = parser(replaced, into=parsed)
+        assert replaced == original
+        assertExpected(parsed)
+
+    def test_it_can_parse_notes(
+        self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
+    ) -> None:
+        original = _without_line_numbers("""
+        01: model: type[Leader] = Follow1
+        02: # ^ NOTE[one] ^ a note
+        03: # ^ NOTE[one] ^ more
+        04: # ^ NOTE ^ even more
+        05: 
+        06:
+        07: if True:
+        08:     reveal_type(found)
+        09:     # ^ NOTE ^ hi
+        """)
+
+        path = "fle.py"
+        location = tmp_path / path
+
+        def assertExpected(file_notices: protocols.FileNotices) -> None:
+            assert list(file_notices.known_line_numbers()) == [1, 8]
+            assert file_notices.known_names == {"one": 1}
+
+            notices_at_1 = [
+                matchers.MatchNote(location=location, line_number=1, msg="a note\nmore\neven more")
+            ]
+            notices_at_8 = [matchers.MatchNote(location=location, line_number=8, msg="hi")]
+
+            assert list(file_notices.notices_at_line(1) or []) == notices_at_1
+            assert list(file_notices.notices_at_line(8) or []) == notices_at_8
+            assert list(file_notices) == [*notices_at_1, *notices_at_8]
+
+        replaced, parsed = parser(original, into=notices.FileNotices(location=location))
+        assert replaced == original
+        assertExpected(parsed)
+
+        # And can run again with no further changes
+        replaced, parsed = parser(replaced, into=parsed)
+        assert replaced == original
+        assertExpected(parsed)
+
+    def test_it_can_parse_errors(
+        self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
+    ) -> None:
+        original = _without_line_numbers("""
+        01: a: int = 1
+        02: model: type[Leader] = Follow1
+        03: # ^ ERROR(arg-type) ^ an error
+        04: # ^ ERROR(arg-type) ^ more
+        05: # ^ ERROR(assignment) ^ another
+        06: 
+        07:
+        08: if True:
+        09:     reveal_type(found)
+        10:     # ^ ERROR(arg-type)[two] ^ hi
+        """)
+
+        path = "fle.py"
+        location = tmp_path / path
+
+        def assertExpected(file_notices: protocols.FileNotices) -> None:
+            assert list(file_notices.known_line_numbers()) == [2, 9]
+            assert file_notices.known_names == {"two": 9}
+
+            notices_at_2 = [
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=2,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="an error",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=2,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="more",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=2,
+                    severity=notices.ErrorSeverity("assignment"),
+                    msg="another",
+                ),
+            ]
+            notices_at_9 = [
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=9,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="hi",
+                )
+            ]
+
+            assert list(file_notices.notices_at_line(2) or []) == notices_at_2
+            assert list(file_notices.notices_at_line(9) or []) == notices_at_9
+            assert list(file_notices) == [*notices_at_2, *notices_at_9]
+
+        replaced, parsed = parser(original, into=notices.FileNotices(location=location))
+        assert replaced == original
+        assertExpected(parsed)
+
+        # And can run again with no further changes
+        replaced, parsed = parser(replaced, into=parsed)
+        assert replaced == original
+        assertExpected(parsed)
+
+    def test_it_can_parse_stacked_reveals(
+        self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
+    ) -> None:
+        original = _without_line_numbers("""
+        01: a: int = 1
+        02: model: type[Leader] = Follow1
+        03: # ^ REVEAL[three] ^ one
+        04: # ^ REVEAL[three] ^ two
+        05: # ^ NOTE ^ three
+        06: # ^ ERROR(arg-type) ^ four
+        """)
+
+        path = "fle.py"
+        location = tmp_path / path
+
+        transformed = _without_line_numbers("""
+        01: a: int = 1
+        02: model: type[Leader] = Follow1
+        03: reveal_type(model)
+        04: # ^ REVEAL[three] ^ one
+        05: # ^ REVEAL[three] ^ two
+        06: # ^ NOTE ^ three
+        07: # ^ ERROR(arg-type) ^ four
+        """)
+
+        def assertExpected(file_notices: protocols.FileNotices) -> None:
+            assert list(file_notices.known_line_numbers()) == [3]
+            assert file_notices.known_names == {"three": 3}
+            notices_at_3 = [
+                matchers.MatchNote(location=location, line_number=3, msg='Revealed type is "one"'),
+                matchers.MatchNote(location=location, line_number=3, msg='Revealed type is "two"'),
+                matchers.MatchNote(location=location, line_number=3, msg="three"),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=3,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="four",
+                ),
+            ]
+            assert list(file_notices.notices_at_line(3) or []) == notices_at_3
+            assert list(file_notices) == [*notices_at_3]
+
+        replaced, parsed = parser(original, into=notices.FileNotices(location=location))
+        assert replaced == transformed
+        assertExpected(parsed)
+
+        # And can run again with no further changes
+        replaced, parsed = parser(replaced, into=parsed)
+        assert replaced == transformed
+        assertExpected(parsed)
+
+    def test_it_can_parse_names(
+        self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
+    ) -> None:
+        original = _without_line_numbers("""
+        01: a: int = 1
+        02: model: type[Leader] = Follow1
+        03: # ^ NAME[three] ^
+        04: 
+        05:
+        06: if True:
+        07:     reveal_type(found)
+        08:     # ^ NAME[four] ^
+        """)
+
+        path = "fle.py"
+        location = tmp_path / path
+
+        def assertExpected(file_notices: protocols.FileNotices) -> None:
+            assert list(file_notices.known_line_numbers()) == []
+            assert file_notices.known_names == {"three": 2, "four": 7}
+            assert list(file_notices) == []
+
+        replaced, parsed = parser(original, into=notices.FileNotices(location=location))
+        assert replaced == original
+        assertExpected(parsed)
+
+        # And can run again with no further changes
+        replaced, parsed = parser(replaced, into=parsed)
+        assert replaced == original
+        assertExpected(parsed)
 
     def test_it_can_parse_whole_file_with_reveals_that_change_the_file(
         self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
@@ -145,6 +802,175 @@ class TestInstructionMatch:
                 *notices_at_14,
                 *notices_at_18,
                 *notices_at_23,
+            ]
+
+        replaced, parsed = parser(original, into=notices.FileNotices(location=location))
+        assert replaced == transformed
+        assertExpected(parsed)
+
+        # And can run again with no further changes
+        replaced, parsed = parser(replaced, into=parsed)
+        assert replaced == transformed
+        assertExpected(parsed)
+
+    def test_it_can_parse_everything(
+        self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
+    ) -> None:
+        original = _without_line_numbers("""
+        01: a: int = 1
+        02: model: type[Leader] = Follow1
+        03: # ^ REVEAL[one] ^ wat
+        04: # ^ ERROR(arg-type) ^ an error
+        05: # ^ ERROR(arg-type) ^ more
+        06: # ^ ERROR(assignment) ^ another
+        07: 
+        08: a: int = "asdf"
+        09: # ^ REVEAL ^ stuff
+        10: # ^ ERROR(assignment) ^ other
+        11: # ^ NOTE ^ one
+        12: # ^ NOTE ^ two
+        13: # ^ NOTE ^ three
+        14: # ^ ERROR(assignment) ^ another
+        15: # ^ NOTE ^ four
+        16:
+        17: def other() -> None:
+        18:     return 1
+        19:     # ^ ERROR(var-annotated) ^ asdf
+        20:     # ^ NAME[hi] ^
+        21:
+        22: if True:
+        23:     reveal_type(found)
+        24:     # ^ REVEAL[other] ^ asdf
+        25:     # ^ REVEAL ^ asdf2
+        26:     # ^ ERROR(arg-type)[other] ^ hi
+        27:     # ^ ERROR(arg-type)[other] ^ hi
+        """)
+
+        path = "fle.py"
+        location = tmp_path / path
+
+        transformed = _without_line_numbers("""
+        01: a: int = 1
+        02: model: type[Leader] = Follow1
+        03: reveal_type(model)
+        04: # ^ REVEAL[one] ^ wat
+        05: # ^ ERROR(arg-type) ^ an error
+        06: # ^ ERROR(arg-type) ^ more
+        07: # ^ ERROR(assignment) ^ another
+        08: 
+        09: a: int = "asdf"
+        10: reveal_type(a)
+        11: # ^ REVEAL ^ stuff
+        12: # ^ ERROR(assignment) ^ other
+        13: # ^ NOTE ^ one
+        14: # ^ NOTE ^ two
+        15: # ^ NOTE ^ three
+        16: # ^ ERROR(assignment) ^ another
+        17: # ^ NOTE ^ four
+        18:
+        19: def other() -> None:
+        20:     return 1
+        21:     # ^ ERROR(var-annotated) ^ asdf
+        22:     # ^ NAME[hi] ^
+        23:
+        24: if True:
+        25:     reveal_type(found)
+        26:     # ^ REVEAL[other] ^ asdf
+        27:     # ^ REVEAL ^ asdf2
+        28:     # ^ ERROR(arg-type)[other] ^ hi
+        29:     # ^ ERROR(arg-type)[other] ^ hi
+        """)
+
+        def assertExpected(file_notices: protocols.FileNotices) -> None:
+            assert list(file_notices.known_line_numbers()) == [3, 10, 20, 25]
+            assert file_notices.known_names == {"one": 3, "hi": 20, "other": 25}
+
+            notices_at_3 = [
+                matchers.MatchNote(location=location, line_number=3, msg='Revealed type is "wat"'),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=3,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="an error",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=3,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="more",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=3,
+                    severity=notices.ErrorSeverity("assignment"),
+                    msg="another",
+                ),
+            ]
+            notices_at_10 = [
+                matchers.MatchNote(
+                    location=location, line_number=10, msg='Revealed type is "stuff"'
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=10,
+                    severity=notices.ErrorSeverity("assignment"),
+                    msg="other",
+                ),
+                matchers.MatchNote(
+                    location=location,
+                    line_number=10,
+                    msg="one\ntwo\nthree",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=10,
+                    severity=notices.ErrorSeverity("assignment"),
+                    msg="another",
+                ),
+                matchers.MatchNote(
+                    location=location,
+                    line_number=10,
+                    msg="four",
+                ),
+            ]
+            notices_at_20 = [
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=20,
+                    severity=notices.ErrorSeverity("var-annotated"),
+                    msg="asdf",
+                ),
+            ]
+            notices_at_25 = [
+                matchers.MatchNote(
+                    location=location, line_number=25, msg='Revealed type is "asdf"'
+                ),
+                matchers.MatchNote(
+                    location=location, line_number=25, msg='Revealed type is "asdf2"'
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=25,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="hi",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=25,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="hi",
+                ),
+            ]
+
+            assert list(file_notices.notices_at_line(3) or []) == notices_at_3
+            assert list(file_notices.notices_at_line(10) or []) == notices_at_10
+            assert list(file_notices.notices_at_line(20) or []) == notices_at_20
+            assert list(file_notices.notices_at_line(25) or []) == notices_at_25
+            assert list(file_notices) == [
+                *notices_at_3,
+                *notices_at_10,
+                *notices_at_20,
+                *notices_at_25,
             ]
 
         replaced, parsed = parser(original, into=notices.FileNotices(location=location))

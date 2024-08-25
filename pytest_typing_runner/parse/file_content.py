@@ -35,13 +35,7 @@ class _ParsedLineAfter:
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class InstructionMatch:
-    class _Instruction(enum.Enum):
-        NAME = "NAME"
-        REVEAL = "REVEAL"
-        ERROR = "ERROR"
-        NOTE = "NOTE"
-
+class CommentMatch:
     severity: protocols.Severity
 
     msg: str = ""
@@ -53,7 +47,18 @@ class InstructionMatch:
 
     modify_lines: parse_protocols.ModifyParsedLineBefore | None = None
 
-    potential_instruction_regex: ClassVar[re.Pattern[str]] = re.compile(r"^\s*#\s*\^")
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class InstructionMatch(CommentMatch):
+    class _Instruction(enum.Enum):
+        NAME = "NAME"
+        REVEAL = "REVEAL"
+        ERROR = "ERROR"
+        NOTE = "NOTE"
+
+    potential_instruction_regex: ClassVar[re.Pattern[str]] = re.compile(
+        r"^\s*#\s*(\^|[a-zA-Z]+\s+\^)"
+    )
     instruction_regex: ClassVar[re.Pattern[str]] = re.compile(
         # ^ INSTR >>
         r"^(?P<prefix_whitespace>\s*)"
@@ -142,6 +147,7 @@ class InstructionMatch:
                 return cls(
                     names=names,
                     is_reveal=True,
+                    is_note=True,
                     severity=notices.NoteSeverity(),
                     msg=notices.ProgramNotice.reveal_msg(rest),
                     modify_lines=functools.partial(
@@ -199,11 +205,23 @@ class InstructionParser:
                 ]
             )
         elif match.is_note:
+            skip: bool = False
+
+            def matcher(notice: protocols.ProgramNotice, /) -> bool:
+                nonlocal skip
+                if skip:
+                    return False
+                if notice.severity == notices.ErrorSeverity("") or notice.is_type_reveal:
+                    skip = True
+                    return False
+                return notice.severity == notices.NoteSeverity()
+
             changer = notice_changers.ModifyLatestMatch(
                 must_exist=False,
-                matcher=lambda notice: not notice.is_type_reveal,
+                matcher=matcher,
                 change=lambda notice: notice.clone(
-                    severity=match.severity, msg=f"{notice.msg}\n{match.msg}"
+                    severity=match.severity,
+                    msg="\n".join([*(() if not notice.msg else (notice.msg,)), match.msg]),
                 ),
             )
 
@@ -266,5 +284,6 @@ if TYPE_CHECKING:
     _PLB: parse_protocols.P_ParsedLineBefore = cast(_ParsedLineBefore, None)
     _PLA: parse_protocols.P_ParsedLineAfter = cast(_ParsedLineAfter, None)
     _IM: parse_protocols.P_CommentMatch = cast(InstructionMatch, None)
+    _CM: parse_protocols.P_CommentMatch = cast(CommentMatch, None)
     _IMM: parse_protocols.P_CommentMatchMaker = InstructionMatch.match
     _IP: parse_protocols.P_LineParser = cast(InstructionParser, None).parse
