@@ -25,6 +25,7 @@ class TestPlugin:
         pytester.makepyfile(
             """
             from pytest_typing_runner import Scenario, ScenarioRunner, protocols
+            import dataclasses
             import pytest
 
 
@@ -32,6 +33,7 @@ class TestPlugin:
                 assert typing_scenario_runner.scenario.__class__ is Scenario
 
             class TestOne:
+                @dataclasses.dataclass(frozen=True, kw_only=True)
                 class MyScenario(Scenario):
                     pass
 
@@ -43,6 +45,7 @@ class TestPlugin:
                     assert isinstance(typing_scenario_runner.scenario, self.MyScenario)
 
             class TestTwo:
+                @dataclasses.dataclass(frozen=True, kw_only=True)
                 class MyScenario2(Scenario):
                     pass
 
@@ -65,6 +68,7 @@ class TestPlugin:
         pytester.makepyfile(
             """
             from pytest_typing_runner import Scenario, ScenarioRunner, protocols
+            import dataclasses
             import pytest
 
 
@@ -72,23 +76,25 @@ class TestPlugin:
                 assert typing_scenario_runner.__class__ is ScenarioRunner
 
             class TestOne:
+                @dataclasses.dataclass(frozen=True, kw_only=True)
                 class MyScenarioRunner(ScenarioRunner[Scenario]):
                     pass
 
                 @pytest.fixture()
                 def typing_scenario_runner_maker(self) -> protocols.ScenarioRunnerMaker[Scenario]:
-                    return self.MyScenarioRunner
+                    return self.MyScenarioRunner.create
 
                 def test_has_scenario(self, typing_scenario_runner: MyScenarioRunner) -> None:
                     assert isinstance(typing_scenario_runner, self.MyScenarioRunner)
 
             class TestTwo:
+                @dataclasses.dataclass(frozen=True, kw_only=True)
                 class MyScenarioRunner2(ScenarioRunner[Scenario]):
                     pass
 
                 @pytest.fixture()
                 def typing_scenario_runner_maker(self) -> type[MyScenarioRunner2]:
-                    return self.MyScenarioRunner2
+                    return self.MyScenarioRunner2.create
 
                 def test_has_scenario(self, typing_scenario_runner: MyScenarioRunner2) -> None:
                     assert isinstance(typing_scenario_runner, self.MyScenarioRunner2)
@@ -110,24 +116,21 @@ class TestPlugin:
         pytester.makeconftest(f"""
         from pytest_typing_runner import RunnerConfig, Scenario, ScenarioRunner
         from pytest_typing_runner import protocols
+        import dataclasses
         import pathlib
         import pytest
 
-        count: int = 0
+        count: dict[None, int] = {{None: 0}}
 
+        def next_count() -> int:
+            count[None] += 1
+            return count[None]
 
+        @dataclasses.dataclass(frozen=True, kw_only=True)
         class MyScenarioRunner(ScenarioRunner[Scenario]):
-            def __init__(
-                self,
-                *,
-                config: RunnerConfig,
-                root_dir: pathlib.Path,
-                scenario_maker: protocols.ScenarioMaker[Scenario],
-            ) -> None:
-                super().__init__(config=config, root_dir=root_dir, scenario_maker=Scenario.create)
-                global count
-                count += 1
-                self.count = count
+            count: int = dataclasses.field(default_factory=next_count)
+
+            def __post_init__(self) -> None:
                 with open("{log}", 'a') as fle:
                     print("__init__", self.count, file=fle)
 
@@ -141,7 +144,7 @@ class TestPlugin:
 
         @pytest.fixture()
         def typing_scenario_runner_maker() -> protocols.ScenarioRunnerMaker[Scenario]:
-            return MyScenarioRunner
+            return MyScenarioRunner.create
         """)
 
         pytester.makepyfile(f"""
@@ -223,14 +226,9 @@ class TestPlugin:
             def add(self, *lines: str) -> None: 
                 self._lines.extend(lines)
 
-
-        class MyScenarioRunner(ScenarioRunner[Scenario]):
-            def create_scenario_runs(self) -> protocols.ScenarioRuns[Scenario]:
-                return Runs(scenario=self.scenario)
-
         @pytest.fixture()
-        def typing_scenario_runner_maker() -> protocols.ScenarioRunnerMaker[Scenario]:
-            return MyScenarioRunner
+        def typing_scenario_runs_maker() -> protocols.ScenarioRunsMaker[Scenario]:
+            return Runs
         """)
 
         pytester.makepyfile("""

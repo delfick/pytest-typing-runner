@@ -149,40 +149,40 @@ class Scenario:
 
     root_dir: pathlib.Path
     same_process: bool
-    typing_strategy: protocols.Strategy
 
     expects: Expects = dataclasses.field(init=False, default_factory=Expects)
     check_paths: list[str] = dataclasses.field(default_factory=lambda: ["."])
 
     @classmethod
     def create(cls, config: protocols.RunnerConfig, root_dir: pathlib.Path) -> Self:
-        return cls(
-            root_dir=root_dir,
-            same_process=config.same_process,
-            typing_strategy=config.typing_strategy_maker(),
-        )
+        return cls(root_dir=root_dir, same_process=config.same_process)
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class ScenarioRunner(Generic[protocols.T_Scenario]):
-    def __init__(
-        self,
+    scenario: protocols.T_Scenario
+    program_runner_maker: protocols.ProgramRunnerMaker[protocols.T_Scenario]
+    runs: protocols.ScenarioRuns[protocols.T_Scenario]
+    cleaners: protocols.RunCleaners
+
+    @classmethod
+    def create(
+        cls,
         *,
         config: protocols.RunnerConfig,
         root_dir: pathlib.Path,
         scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
-    ) -> None:
-        self.scenario = scenario_maker(config=config, root_dir=root_dir)
-        self.program_runner_maker = self.scenario.typing_strategy.program_runner_chooser(
-            scenario=self.scenario
+        scenario_runs_maker: protocols.ScenarioRunsMaker[protocols.T_Scenario],
+    ) -> Self:
+        scenario = scenario_maker(config=config, root_dir=root_dir)
+        return cls(
+            scenario=scenario,
+            program_runner_maker=config.typing_strategy_maker().program_runner_chooser(
+                scenario=scenario
+            ),
+            runs=scenario_runs_maker(scenario=scenario),
+            cleaners=RunCleaners(),
         )
-        self.runs = self.create_scenario_runs()
-        self.cleaners = RunCleaners()
-
-    def create_scenario_runs(self) -> protocols.ScenarioRuns[protocols.T_Scenario]:
-        """
-        Used to create the object that will represent information about the type checker runs
-        """
-        return ScenarioRuns(scenario=self.scenario)
 
     def prepare_scenario(self) -> None:
         """
@@ -313,7 +313,9 @@ if TYPE_CHECKING:
     _CS: protocols.P_Scenario = cast(C_Scenario, None)
     _CSR: protocols.ScenarioRuns[C_Scenario] = cast(C_ScenarioRuns, None)
     _CSM: protocols.ScenarioMaker[C_Scenario] = C_Scenario.create
+    _CSRM: protocols.ScenarioRunsMaker[C_Scenario] = C_ScenarioRuns
     _CSRU: protocols.ScenarioRunner[C_Scenario] = cast(C_ScenarioRunner, None)
+    _CSRUM: protocols.ScenarioRunnerMaker[C_Scenario] = C_ScenarioRunner.create
 
     _E: protocols.Expects = cast(Expects, None)
     _RCS: protocols.RunCleaners = cast(RunCleaners, None)

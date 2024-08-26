@@ -396,6 +396,14 @@ class ScenarioRuns(Protocol[T_Scenario]):
         """
 
 
+class ScenarioRunsMaker(Protocol[T_Scenario]):
+    """
+    Used to construct a scenario runs
+    """
+
+    def __call__(self, *, scenario: T_Scenario) -> ScenarioRuns[T_Scenario]: ...
+
+
 class Severity(Protocol):
     """
     Used to represent the severity of a notice
@@ -790,12 +798,6 @@ class Scenario(Protocol):
         The files the type checker should specifically taret
         """
 
-    @property
-    def typing_strategy(self) -> Strategy:
-        """
-        A typing strategy specific to this scenario
-        """
-
 
 class ScenarioRunner(Protocol[T_Scenario]):
     """
@@ -901,6 +903,7 @@ class ScenarioRunnerMaker(Protocol[T_Scenario]):
         config: RunnerConfig,
         root_dir: pathlib.Path,
         scenario_maker: ScenarioMaker[T_Scenario],
+        scenario_runs_maker: ScenarioRunsMaker[T_Scenario],
     ) -> ScenarioRunner[T_Scenario]: ...
 
 
@@ -944,6 +947,7 @@ if TYPE_CHECKING:
     P_Expectations = Expectations[P_Scenario]
     P_ScenarioMaker = ScenarioMaker[P_Scenario]
     P_ScenarioRunner = ScenarioRunner[P_Scenario]
+    P_ScenarioRunsMaker = ScenarioRunsMaker[P_Scenario]
     P_ScenarioFileMaker = ScenarioFileMaker[P_ScenarioFile]
     P_ExpectationsMaker = ExpectationsMaker[P_Scenario]
     P_ExpectationsSetup = ExpectationsSetup

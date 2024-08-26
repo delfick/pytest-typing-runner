@@ -5,7 +5,7 @@ import pytest
 from _pytest.config.argparsing import Parser
 
 from . import protocols, strategies
-from .scenario import RunnerConfig, Scenario, ScenarioRunner
+from .scenario import RunnerConfig, Scenario, ScenarioRunner, ScenarioRuns
 
 
 @pytest.fixture
@@ -28,13 +28,21 @@ def typing_scenario_maker() -> protocols.ScenarioMaker[protocols.Scenario]:
 def typing_scenario_runner_maker(
     typing_scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
 ) -> protocols.ScenarioRunnerMaker[protocols.T_Scenario]:
-    return ScenarioRunner
+    return ScenarioRunner.create
+
+
+@pytest.fixture
+def typing_scenario_runs_maker(
+    typing_scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
+) -> protocols.ScenarioRunsMaker[protocols.T_Scenario]:
+    return ScenarioRuns
 
 
 @pytest.fixture
 def typing_scenario_runner(
     typing_runner_config: RunnerConfig,
     typing_scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
+    typing_scenario_runs_maker: protocols.ScenarioRunsMaker[protocols.T_Scenario],
     typing_scenario_runner_maker: protocols.ScenarioRunnerMaker[protocols.T_Scenario],
     request: pytest.FixtureRequest,
     tmp_path: pathlib.Path,
@@ -43,7 +51,10 @@ def typing_scenario_runner(
     Pytest fixture used to get a typing scenario helper and manage cleanup
     """
     runner = typing_scenario_runner_maker(
-        config=typing_runner_config, root_dir=tmp_path, scenario_maker=typing_scenario_maker
+        config=typing_runner_config,
+        root_dir=tmp_path,
+        scenario_maker=typing_scenario_maker,
+        scenario_runs_maker=typing_scenario_runs_maker,
     )
     request.node.user_properties.append(("typing_runner", runner))
 
