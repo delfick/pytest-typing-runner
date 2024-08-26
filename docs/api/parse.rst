@@ -147,10 +147,6 @@ to the file, and when creating expectations, the ``file_notices`` are used to
 say what notices are expected. And raise an error if the second parse creates
 more transformations.
 
-The default implementation of
-:protocol:`pytest_typing_runner.protocols.Scenario.parse_notices_from_file`
-will do the same logic as in the above example.
-
 API for parsing input content
 -----------------------------
 

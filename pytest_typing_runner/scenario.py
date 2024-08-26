@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self
 
-from . import notices, parse, protocols, runner
+from . import notices, protocols, runner
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -297,11 +297,6 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         """
         return notice
 
-    def parse_notices_from_file(
-        self, content: str, /, *, into: protocols.FileNotices
-    ) -> tuple[str, protocols.FileNotices]:
-        return parse.FileContent().parse(textwrap.dedent(content), into=into)
-
     def generate_program_notices(self) -> protocols.ProgramNotices:
         return notices.ProgramNotices()
 
@@ -322,4 +317,3 @@ if TYPE_CHECKING:
 
     _E: protocols.Expects = cast(Expects, None)
     _RCS: protocols.RunCleaners = cast(RunCleaners, None)
-    _PNFF: protocols.FileNoticesParser = cast(C_ScenarioRunner, None).parse_notices_from_file

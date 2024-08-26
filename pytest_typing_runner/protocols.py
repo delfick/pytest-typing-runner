@@ -876,13 +876,6 @@ class ScenarioRunner(Protocol[T_Scenario]):
         Used to normalise each notice parsed from the output of the program runner
         """
 
-    def parse_notices_from_file(
-        self, content: str, /, *, into: FileNotices
-    ) -> tuple[str, FileNotices]:
-        """
-        Used to transform and parse content for any expected notices in the comments
-        """
-
     def generate_program_notices(self) -> ProgramNotices:
         """
         Return an object that satisfies an empty :protocol:`ProgramNotices`
@@ -984,4 +977,3 @@ if TYPE_CHECKING:
     P_StrategyRegistry = StrategyRegistry
 
     _FM: P_FileModifier = cast(P_ScenarioRunner, None).file_modification
-    _PNFF: FileNoticesParser = cast(P_ScenarioRunner, None).parse_notices_from_file
