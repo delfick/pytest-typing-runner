@@ -22,6 +22,29 @@ class RunnerConfig:
     typing_strategy_maker: protocols.StrategyMaker
 
 
+@dataclasses.dataclass
+class Expects:
+    failure: bool = False
+    daemon_restarted: bool = False
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Scenario:
+    """
+    Default implementation of the protocols.Scenario
+    """
+
+    root_dir: pathlib.Path
+    same_process: bool
+
+    expects: Expects = dataclasses.field(init=False, default_factory=Expects)
+    check_paths: list[str] = dataclasses.field(default_factory=lambda: ["."])
+
+    @classmethod
+    def create(cls, config: protocols.RunnerConfig, root_dir: pathlib.Path) -> Self:
+        return cls(root_dir=root_dir, same_process=config.same_process)
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class RunCleaners:
     """
@@ -133,29 +156,6 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
         )
         self._runs.append(run)
         return run
-
-
-@dataclasses.dataclass
-class Expects:
-    failure: bool = False
-    daemon_restarted: bool = False
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class Scenario:
-    """
-    Default implementation of the protocols.Scenario
-    """
-
-    root_dir: pathlib.Path
-    same_process: bool
-
-    expects: Expects = dataclasses.field(init=False, default_factory=Expects)
-    check_paths: list[str] = dataclasses.field(default_factory=lambda: ["."])
-
-    @classmethod
-    def create(cls, config: protocols.RunnerConfig, root_dir: pathlib.Path) -> Self:
-        return cls(root_dir=root_dir, same_process=config.same_process)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
