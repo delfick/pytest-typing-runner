@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import enum
 import pathlib
 from collections.abc import Iterator, Mapping, MutableMapping, MutableSequence, Sequence
 from typing import TYPE_CHECKING, Literal, Protocol, TypedDict, TypeVar, cast, overload
@@ -10,27 +9,6 @@ from typing_extensions import NotRequired, Self, Unpack
 T_Scenario = TypeVar("T_Scenario", bound="Scenario")
 T_CO_Scenario = TypeVar("T_CO_Scenario", bound="Scenario", covariant=True)
 T_CO_ScenarioFile = TypeVar("T_CO_ScenarioFile", bound="P_ScenarioFile", covariant=True)
-
-
-class Strategy(enum.Enum):
-    """
-    The caching strategy used by the plugin
-
-    MYPY_NO_INCREMENTAL
-      - mypy is run only once for each run with --no-incremental
-
-    MYPY_INCREMENTAL
-      - mypy is run twice for each run with --incremental.
-      - First with an empty cache relative to the temporary directory
-      - and again after that cache is made.
-
-    MYPY_DAEMON
-      - A new dmypy is started and run twice for each run
-    """
-
-    MYPY_NO_INCREMENTAL = "MYPY_NO_INCREMENTAL"
-    MYPY_INCREMENTAL = "MYPY_INCREMENTAL"
-    MYPY_DAEMON = "MYPY_DAEMON"
 
 
 class RunCleaner(Protocol):
@@ -69,7 +47,7 @@ class RunOptions(Protocol[T_Scenario]):
     scenario: T_Scenario
     typing_strategy: Strategy
     cwd: pathlib.Path
-    runner: ProgramRunner[T_Scenario]
+    runner: ProgramRunner
     args: MutableSequence[str]
     check_paths: MutableSequence[str]
     do_followup: bool
@@ -138,7 +116,7 @@ class RunnerConfig(Protocol):
         """
 
     @property
-    def typing_strategy(self) -> Strategy:
+    def typing_strategy_maker(self) -> StrategyMaker:
         """
         Set by the --typing-strategy option.
 
@@ -146,12 +124,14 @@ class RunnerConfig(Protocol):
         """
 
 
-class ProgramRunner(Protocol[T_Scenario]):
+class ProgramRunner(Protocol):
     """
     Used to run the static type checker
     """
 
-    def run(self, options: RunOptions[T_Scenario]) -> RunResult[T_Scenario]:
+    def run(
+        self, *, scenario: T_Scenario, options: RunOptions[T_Scenario]
+    ) -> RunResult[T_Scenario]:
         """
         Run the static type checker and return a result
         """
@@ -159,6 +139,7 @@ class ProgramRunner(Protocol[T_Scenario]):
     def check_notices(
         self,
         *,
+        scenario: T_Scenario,
         result: RunResult[T_Scenario],
         expected_notices: ProgramNotices,
     ) -> None:
@@ -170,6 +151,92 @@ class ProgramRunner(Protocol[T_Scenario]):
         """
         Return a string to represent the command that was run
         """
+
+
+class Strategy(Protocol):
+    @property
+    def program_short(self) -> str:
+        """
+        String representing the family of type checker (i.e. "mypy", "pyright", etc)
+        """
+
+    @property
+    def is_daemon(self) -> bool:
+        """
+        Whether this strategy makes use of a background daemon process
+        """
+
+    def make_program_runner(self) -> ProgramRunner:
+        """
+        Create a program runner for this strategy
+        """
+
+    def make_default_args(self) -> list[str]:
+        """
+        Return the default args for this runner
+        """
+
+    @property
+    def do_followups(self) -> bool:
+        """
+        Return whether there is a point in doing followup runs with this runner
+        """
+
+
+class StrategyMaker(Protocol):
+    """
+    Used to construct an object implementing :protocol:`Strategy`
+    """
+
+    def __call__(self, *, config: RunnerConfig) -> Strategy: ...
+
+
+class StrategyRegistry(Protocol):
+    """
+    Used to register different typing strategies
+    """
+
+    def register(
+        self, *, name: str, description: str, maker: StrategyMaker, make_default: bool = False
+    ) -> None:
+        """
+        Register a maker to a specific name
+        """
+
+    def remove_strategy(self, *, name: str) -> None:
+        """
+        Remove a strategy
+        """
+
+    def set_default(self, *, name: str) -> None:
+        """
+        Set the default strategy
+        """
+
+    def get_strategy(self, *, name: str) -> tuple[str, StrategyMaker] | None:
+        """
+        Return the strategy for the provided name if one exists
+        """
+
+    @property
+    def default(self) -> str:
+        """
+        Return the default strategy
+        """
+
+    @property
+    def choices(self) -> list[str]:
+        """
+        Return the known strategies
+        """
+
+
+class StrategyRegisterer(Protocol):
+    """
+    Used to register strategies
+    """
+
+    def __call__(self, registry: StrategyRegistry, /) -> None: ...
 
 
 class ScenarioRun(Protocol[T_Scenario]):
@@ -799,9 +866,12 @@ if TYPE_CHECKING:
     P_RunOptions = RunOptions[P_Scenario]
     P_RunResult = RunResult[P_Scenario]
     P_RunnerConfig = RunnerConfig
-    P_ProgramRunner = ProgramRunner[P_Scenario]
+    P_ProgramRunner = ProgramRunner
     P_RunCleaner = RunCleaner
     P_RunCleaners = RunCleaners
+    P_Strategy = Strategy
+    P_StrategyMaker = StrategyMaker
+    P_StrategyRegistry = StrategyRegistry
 
     _FM: P_FileModifier = cast(P_ScenarioRunner, None).file_modification
     _PNFF: FileNoticesParser = cast(Scenario, None).parse_notices_from_file

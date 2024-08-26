@@ -7,7 +7,7 @@ import textwrap
 from collections.abc import Iterator, MutableMapping, MutableSequence, Sequence
 from typing import TYPE_CHECKING, Generic, cast
 
-from typing_extensions import Self, assert_never
+from typing_extensions import Self
 
 from . import notices, parse, protocols, runner
 
@@ -19,13 +19,7 @@ class RunnerConfig:
     """
 
     same_process: bool
-    typing_strategy: protocols.Strategy
-
-    def __post_init__(self) -> None:
-        if self.typing_strategy is protocols.Strategy.MYPY_DAEMON and self.same_process:
-            raise ValueError(
-                "The DAEMON strategy cannot also be in run in the same pytest process"
-            )
+    typing_strategy_maker: protocols.StrategyMaker
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -155,7 +149,7 @@ class Scenario:
         return cls(
             root_dir=root_dir,
             same_process=config.same_process,
-            typing_strategy=config.typing_strategy,
+            typing_strategy=config.typing_strategy_maker(config=config),
         )
 
     def execute_static_checking(
@@ -166,7 +160,7 @@ class Scenario:
         """
         Default implementation returns the result of running the runner on options with those options
         """
-        return options.runner.run(options)
+        return options.runner.run(scenario=self, options=options)
 
     def check_results(
         self: protocols.T_Scenario,
@@ -300,38 +294,14 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         """
         Default implementation uses the plugin config to determine the bare essential options
         """
-        cwd = self.scenario.root_dir
-        run: protocols.ProgramRunner[protocols.T_Scenario]
-
-        if self.scenario.typing_strategy is protocols.Strategy.MYPY_INCREMENTAL:
-            if self.scenario.same_process:
-                run = runner.SameProcessMypyRunner()
-            else:
-                run = runner.ExternalMypyRunner()
-            args = ["--incremental"]
-            do_followup = True
-        elif self.scenario.typing_strategy is protocols.Strategy.MYPY_NO_INCREMENTAL:
-            if self.scenario.same_process:
-                run = runner.SameProcessMypyRunner()
-            else:
-                run = runner.ExternalMypyRunner()
-            args = ["--no-incremental"]
-            do_followup = False
-        elif self.scenario.typing_strategy is protocols.Strategy.MYPY_DAEMON:
-            run = runner.ExternalDaemonMypyRunner()
-            args = ["run", "--"]
-            do_followup = True
-        else:
-            assert_never(self.typing_strategy)
-
         return runner.RunOptions(
             scenario=self.scenario,
             typing_strategy=self.scenario.typing_strategy,
-            runner=run,
-            cwd=cwd,
+            runner=self.scenario.typing_strategy.make_program_runner(),
+            cwd=self.scenario.root_dir,
             check_paths=self.scenario.check_paths,
-            args=args,
-            do_followup=do_followup,
+            args=self.scenario.typing_strategy.make_default_args(),
+            do_followup=self.scenario.typing_strategy.do_followups,
             environment_overrides={},
             cleaners=self.cleaners,
         )

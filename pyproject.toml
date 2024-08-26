@@ -13,6 +13,8 @@ authors = [
     { name = "Stephen Moore", email = "stephen@delfick.com" },
 ]
 
+[project.entry-points.pytest_typing_runner_strategies]
+a_register = "pytest_typing_runner.strategies:register_default_strategies"
 
 [project.optional-dependencies]
 tests = [

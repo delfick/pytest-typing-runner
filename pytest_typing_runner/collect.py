@@ -1,11 +1,10 @@
 import pathlib
-import textwrap
 from collections.abc import Iterator
 
 import pytest
 from _pytest.config.argparsing import Parser
 
-from . import protocols
+from . import protocols, strategies
 from .scenario import RunnerConfig, Scenario, ScenarioRunner
 
 
@@ -16,7 +15,7 @@ def typing_runner_config(pytestconfig: pytest.Config) -> protocols.RunnerConfig:
     """
     return RunnerConfig(
         same_process=pytestconfig.option.typing_same_process,
-        typing_strategy=protocols.Strategy(pytestconfig.option.typing_strategy),
+        typing_strategy_maker=pytestconfig.option.typing_strategy,
     )
 
 
@@ -84,9 +83,7 @@ def pytest_addoption(parser: Parser) -> None:
         action="store_true",
         help="Run in the same process. Useful for debugging, will create problems with import cache",
     )
+    info = strategies.StrategyRegistry.discover().cli_option_info()
     group.addoption(
-        "--typing-strategy",
-        choices=[strat.name for strat in protocols.Strategy],
-        help=textwrap.dedent(protocols.Strategy.__doc__ or ""),
-        default=protocols.Strategy.MYPY_INCREMENTAL.value,
+        "--typing-strategy", help=info.help_text, type=info.str_to_maker, default=info.default
     )

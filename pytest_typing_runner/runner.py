@@ -23,7 +23,7 @@ class RunOptions(Generic[protocols.T_Scenario]):
 
     scenario: protocols.T_Scenario
     typing_strategy: protocols.Strategy
-    runner: protocols.ProgramRunner[protocols.T_Scenario]
+    runner: protocols.ProgramRunner
     cwd: pathlib.Path
     args: MutableSequence[str]
     check_paths: MutableSequence[str]
@@ -32,12 +32,12 @@ class RunOptions(Generic[protocols.T_Scenario]):
     cleaners: protocols.RunCleaners
 
 
-class ExternalMypyRunner(Generic[protocols.T_Scenario]):
+class ExternalMypyRunner:
     def __init__(self, *, mypy_name: str = "mypy") -> None:
         self._command: Sequence[str] = (sys.executable, "-m", mypy_name)
 
     def run(
-        self, options: protocols.RunOptions[protocols.T_Scenario]
+        self, scenario: protocols.T_Scenario, options: protocols.RunOptions[protocols.T_Scenario]
     ) -> expectations.RunResult[protocols.T_Scenario]:
         """
         Run mypy as an external process
@@ -66,6 +66,7 @@ class ExternalMypyRunner(Generic[protocols.T_Scenario]):
     def check_notices(
         self,
         *,
+        scenario: protocols.T_Scenario,
         result: protocols.RunResult[protocols.T_Scenario],
         expected_notices: protocols.ProgramNotices,
     ) -> None:
@@ -94,9 +95,9 @@ class ExternalMypyRunner(Generic[protocols.T_Scenario]):
         return " ".join(self._command)
 
 
-class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
+class SameProcessMypyRunner:
     def run(
-        self, options: protocols.RunOptions[protocols.T_Scenario]
+        self, scenario: protocols.T_Scenario, options: protocols.RunOptions[protocols.T_Scenario]
     ) -> protocols.RunResult[protocols.T_Scenario]:
         """
         Run mypy inside the existing process
@@ -195,6 +196,7 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
     def check_notices(
         self,
         *,
+        scenario: protocols.T_Scenario,
         result: protocols.RunResult[protocols.T_Scenario],
         expected_notices: protocols.ProgramNotices,
     ) -> None:
@@ -223,7 +225,7 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
         return "inprocess::mypy"
 
 
-class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
+class ExternalDaemonMypyRunner(ExternalMypyRunner):
     def __init__(self) -> None:
         super().__init__(mypy_name="mypy.dmypy")
 
@@ -236,7 +238,7 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
             ), f"Failed to stop dmypy: {completed.returncode}\n{completed.stdout.decode()}\n{completed.stderr.decode()}"
 
     def run(
-        self, options: protocols.RunOptions[protocols.T_Scenario]
+        self, scenario: protocols.T_Scenario, options: protocols.RunOptions[protocols.T_Scenario]
     ) -> expectations.RunResult[protocols.T_Scenario]:
         """
         Run dmypy as an external process
@@ -245,7 +247,7 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
             f"program_runner::dmypy::{options.cwd}",
             functools.partial(self._cleanup, cwd=options.cwd),
         )
-        result = super().run(options)
+        result = super().run(scenario=scenario, options=options)
         lines = result.stdout.strip().split("\n")
         if lines and lines[-1].startswith("Success: no issues found"):
             # dmypy can return exit_code=1 even if it was successful
@@ -256,6 +258,7 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
     def check_notices(
         self,
         *,
+        scenario: protocols.T_Scenario,
         result: protocols.RunResult[protocols.T_Scenario],
         expected_notices: protocols.ProgramNotices,
     ) -> None:
@@ -316,12 +319,6 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
 if TYPE_CHECKING:
     _RO: protocols.RunOptions[protocols.P_Scenario] = cast(RunOptions[protocols.P_Scenario], None)
 
-    _EMR: protocols.ProgramRunner[protocols.P_Scenario] = cast(
-        ExternalMypyRunner[protocols.P_Scenario], None
-    )
-    _SPM: protocols.ProgramRunner[protocols.P_Scenario] = cast(
-        SameProcessMypyRunner[protocols.P_Scenario], None
-    )
-    _EDMR: protocols.ProgramRunner[protocols.P_Scenario] = cast(
-        ExternalDaemonMypyRunner[protocols.P_Scenario], None
-    )
+    _EMR: protocols.ProgramRunner = cast(ExternalMypyRunner, None)
+    _SPM: protocols.ProgramRunner = cast(SameProcessMypyRunner, None)
+    _EDMR: protocols.ProgramRunner = cast(ExternalDaemonMypyRunner, None)
