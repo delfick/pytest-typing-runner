@@ -8,22 +8,21 @@ import pathlib
 import subprocess
 import sys
 from collections.abc import Iterator, MutableMapping, MutableSequence, Sequence
-from typing import TYPE_CHECKING, Generic, TextIO, cast
+from typing import TYPE_CHECKING, ClassVar, Generic, TextIO, cast
 
 import pytest
 
 from . import expectations, parse, protocols
 
 
-@dataclasses.dataclass(kw_only=True)
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class RunOptions(Generic[protocols.T_Scenario]):
     """
     A concrete implementation of protocols.RunOptions
     """
 
-    scenario: protocols.T_Scenario
-    typing_strategy: protocols.Strategy
-    runner: protocols.ProgramRunner
+    scenario_runner: protocols.ScenarioRunner[protocols.T_Scenario]
+    make_program_runner: protocols.ProgramRunnerMaker[protocols.T_Scenario]
     cwd: pathlib.Path
     args: MutableSequence[str]
     check_paths: MutableSequence[str]
@@ -32,46 +31,30 @@ class RunOptions(Generic[protocols.T_Scenario]):
     cleaners: protocols.RunCleaners
 
 
-class ExternalMypyRunner:
-    def __init__(self, *, mypy_name: str = "mypy") -> None:
-        self._command: Sequence[str] = (sys.executable, "-m", mypy_name)
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class MypyChecker(Generic[protocols.T_Scenario]):
+    result: expectations.RunResult
+    runner: protocols.ProgramRunner[protocols.T_Scenario]
 
-    def run(
-        self, scenario: protocols.T_Scenario, options: protocols.RunOptions[protocols.T_Scenario]
-    ) -> expectations.RunResult[protocols.T_Scenario]:
-        """
-        Run mypy as an external process
-        """
-        env = dict(os.environ)
-        for k, v in options.environment_overrides.items():
-            if v is None:
-                if k in env:
-                    del env[k]
-            else:
-                env[k] = v
-
-        completed = subprocess.run(
-            [*self._command, *options.args, *options.check_paths],
-            capture_output=True,
-            cwd=options.cwd,
-            env=env,
+    def _check_lines(self, lines: list[str], expected_notices: protocols.ProgramNotices) -> None:
+        got = parse.MypyOutput.parse(
+            lines,
+            into=self.runner.options.scenario_runner.generate_program_notices(),
+            normalise=functools.partial(
+                self.runner.options.scenario_runner.normalise_program_runner_notice,
+                self.runner.options,
+            ),
+            root_dir=self.runner.options.cwd,
         )
-        return expectations.RunResult.from_options(
-            options,
-            completed.returncode,
-            stdout=completed.stdout.decode(),
-            stderr=completed.stderr.decode(),
+        expectations.compare_notices(
+            got.diff(root_dir=self.runner.options.cwd, other=expected_notices)
         )
 
-    def check_notices(
-        self,
-        *,
-        scenario: protocols.T_Scenario,
-        result: protocols.RunResult[protocols.T_Scenario],
-        expected_notices: protocols.ProgramNotices,
-    ) -> None:
+    def check(self, expected_notices: protocols.ProgramNotices, /) -> None:
         lines: list[str] = [
-            line for line in result.stdout.strip().split("\n") if not line.startswith(":debug:")
+            line
+            for line in self.result.stdout.strip().split("\n")
+            if not line.startswith(":debug:")
         ]
         if lines[-1].startswith("Found "):
             lines.pop()
@@ -79,26 +62,59 @@ class ExternalMypyRunner:
         if lines[-1].startswith("Success: no issues"):
             lines.pop()
 
-        got = parse.MypyOutput.parse(
-            lines,
-            into=result.options.scenario.generate_program_notices(),
-            normalise=functools.partial(
-                result.options.scenario.normalise_program_runner_notice, result.options
-            ),
-            root_dir=result.options.cwd,
-        )
-        expectations.compare_notices(
-            got.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
-        )
+        self._check_lines(lines, expected_notices)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ExternalMypyRunner(Generic[protocols.T_Scenario]):
+    mypy_name: ClassVar[str] = "mypy"
+    options: protocols.RunOptions[protocols.T_Scenario]
+
+    @property
+    def command(self) -> Sequence[str]:
+        return (sys.executable, "-m", self.mypy_name)
 
     def short_display(self) -> str:
-        return " ".join(self._command)
+        return " ".join(self.command)
 
-
-class SameProcessMypyRunner:
     def run(
-        self, scenario: protocols.T_Scenario, options: protocols.RunOptions[protocols.T_Scenario]
-    ) -> protocols.RunResult[protocols.T_Scenario]:
+        self, *, checker_kls: type[MypyChecker[protocols.T_Scenario]] = MypyChecker
+    ) -> protocols.NoticeChecker[protocols.T_Scenario]:
+        """
+        Run mypy as an external process
+        """
+        env = dict(os.environ)
+        for k, v in self.options.environment_overrides.items():
+            if v is None:
+                if k in env:
+                    del env[k]
+            else:
+                env[k] = v
+
+        completed = subprocess.run(
+            [*self.command, *self.options.args, *self.options.check_paths],
+            capture_output=True,
+            cwd=self.options.cwd,
+            env=env,
+        )
+        return checker_kls(
+            runner=self,
+            result=expectations.RunResult(
+                exit_code=completed.returncode,
+                stdout=completed.stdout.decode(),
+                stderr=completed.stderr.decode(),
+            ),
+        )
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
+    options: protocols.RunOptions[protocols.T_Scenario]
+
+    def short_display(self) -> str:
+        return "inprocess::mypy"
+
+    def run(self) -> protocols.NoticeChecker[protocols.T_Scenario]:
         """
         Run mypy inside the existing process
         """
@@ -115,23 +131,28 @@ class SameProcessMypyRunner:
 
         exit_code = -1
         with saved_sys(), pytest.MonkeyPatch().context() as monkey_patch:
-            for k, v in options.environment_overrides.items():
+            for k, v in self.options.environment_overrides.items():
                 if v is None:
                     monkey_patch.delenv(k, raising=False)
                 else:
                     monkey_patch.setenv(k, v)
 
-            if (cwd_str := str(options.cwd)) not in sys.path:
+            if (cwd_str := str(self.options.cwd)) not in sys.path:
                 sys.path.insert(0, cwd_str)
 
             stdout = io.StringIO()
             stderr = io.StringIO()
 
             with stdout, stderr:
-                exit_code = self._run_inprocess(options, stdout=stdout, stderr=stderr)
+                exit_code = self._run_inprocess(self.options, stdout=stdout, stderr=stderr)
 
-            return expectations.RunResult.from_options(
-                options, exit_code, stdout=stdout.getvalue(), stderr=stderr.getvalue()
+            return MypyChecker(
+                runner=self,
+                result=expectations.RunResult(
+                    exit_code=exit_code,
+                    stdout=stdout.getvalue(),
+                    stderr=stderr.getvalue(),
+                ),
             )
 
     def _run_inprocess(
@@ -193,77 +214,17 @@ class SameProcessMypyRunner:
         else:
             return 0
 
-    def check_notices(
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class DaemonMypyChecker(MypyChecker[protocols.T_Scenario]):
+    def check(
         self,
-        *,
-        scenario: protocols.T_Scenario,
-        result: protocols.RunResult[protocols.T_Scenario],
         expected_notices: protocols.ProgramNotices,
     ) -> None:
         lines: list[str] = [
-            line for line in result.stdout.strip().split("\n") if not line.startswith(":debug:")
-        ]
-        if lines[-1].startswith("Found "):
-            lines.pop()
-
-        if lines[-1].startswith("Success: no issues"):
-            lines.pop()
-
-        got = parse.MypyOutput.parse(
-            lines,
-            into=result.options.scenario.generate_program_notices(),
-            normalise=functools.partial(
-                result.options.scenario.normalise_program_runner_notice, result.options
-            ),
-            root_dir=result.options.cwd,
-        )
-        expectations.compare_notices(
-            got.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
-        )
-
-    def short_display(self) -> str:
-        return "inprocess::mypy"
-
-
-class ExternalDaemonMypyRunner(ExternalMypyRunner):
-    def __init__(self) -> None:
-        super().__init__(mypy_name="mypy.dmypy")
-
-    def _cleanup(self, *, cwd: pathlib.Path) -> None:
-        completed = subprocess.run([*self._command, "status"], capture_output=True, cwd=cwd)
-        if completed.returncode == 0:
-            completed = subprocess.run([*self._command, "kill"], capture_output=True, cwd=cwd)
-            assert (
-                completed.returncode == 0
-            ), f"Failed to stop dmypy: {completed.returncode}\n{completed.stdout.decode()}\n{completed.stderr.decode()}"
-
-    def run(
-        self, scenario: protocols.T_Scenario, options: protocols.RunOptions[protocols.T_Scenario]
-    ) -> expectations.RunResult[protocols.T_Scenario]:
-        """
-        Run dmypy as an external process
-        """
-        options.cleaners.add(
-            f"program_runner::dmypy::{options.cwd}",
-            functools.partial(self._cleanup, cwd=options.cwd),
-        )
-        result = super().run(scenario=scenario, options=options)
-        lines = result.stdout.strip().split("\n")
-        if lines and lines[-1].startswith("Success: no issues found"):
-            # dmypy can return exit_code=1 even if it was successful
-            return dataclasses.replace(result, exit_code=0)
-        else:
-            return result
-
-    def check_notices(
-        self,
-        *,
-        scenario: protocols.T_Scenario,
-        result: protocols.RunResult[protocols.T_Scenario],
-        expected_notices: protocols.ProgramNotices,
-    ) -> None:
-        lines: list[str] = [
-            line for line in result.stdout.strip().split("\n") if not line.startswith(":debug:")
+            line
+            for line in self.result.stdout.strip().split("\n")
+            if not line.startswith(":debug:")
         ]
         if lines[-1].startswith("Found "):
             lines.pop()
@@ -284,41 +245,72 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner):
         if lines and lines[0] == "Daemon started":
             lines.pop(0)
 
-        got = parse.MypyOutput.parse(
-            lines,
-            into=result.options.scenario.generate_program_notices(),
-            normalise=functools.partial(
-                result.options.scenario.normalise_program_runner_notice, result.options
-            ),
-            root_dir=result.options.cwd,
-        )
-        expectations.compare_notices(
-            got.diff(root_dir=result.options.scenario.root_dir, other=expected_notices)
-        )
-        self.check_daemon_restarted(result, restarted=daemon_restarted)
+        self._check_lines(lines, expected_notices)
+        self.check_daemon_restarted(restarted=daemon_restarted)
 
-    def check_daemon_restarted(
-        self,
-        result: protocols.RunResult[protocols.T_Scenario],
-        *,
-        restarted: bool,
-    ) -> None:
-        if result.options.scenario.expect_dmypy_restarted:
+    def check_daemon_restarted(self, *, restarted: bool) -> None:
+        if self.runner.options.scenario_runner.scenario.expects.daemon_restarted:
             # Followup run should not restart the daemon again
-            result.options.scenario.expect_dmypy_restarted = False
+            self.runner.options.scenario_runner.scenario.expects.daemon_restarted = False
 
             # We expected a restart, assert we did actually restart
             assert restarted
         else:
             assert not restarted
 
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
+    mypy_name: ClassVar[str] = "mypy.dmypy"
+
+    def __post_init__(self) -> None:
+        if self.options.scenario_runner.scenario.same_process:
+            raise ValueError(
+                "The DAEMON strategy cannot also be in run in the same pytest process"
+            )
+
     def short_display(self) -> str:
-        return " ".join(self._command)
+        return " ".join(self.command)
+
+    def run(
+        self, checker_kls: type[MypyChecker[protocols.T_Scenario]] = DaemonMypyChecker
+    ) -> protocols.NoticeChecker[protocols.T_Scenario]:
+        """
+        Run dmypy as an external process
+        """
+        self.options.cleaners.add(
+            f"program_runner::dmypy::{self.options.cwd}",
+            functools.partial(self._cleanup, cwd=self.options.cwd),
+        )
+        checker = super().run(checker_kls=checker_kls)
+        lines = checker.result.stdout.strip().split("\n")
+
+        # dmypy can return exit_code=1 even if it was successful
+        exit_code = checker.result.exit_code
+        if lines and lines[-1].startswith("Success: no issues found"):
+            exit_code = 0
+
+        return checker_kls(
+            runner=self,
+            result=expectations.RunResult(
+                exit_code=exit_code, stdout=checker.result.stdout, stderr=checker.result.stderr
+            ),
+        )
+
+    def _cleanup(self, *, cwd: pathlib.Path) -> None:
+        completed = subprocess.run([*self.command, "status"], capture_output=True, cwd=cwd)
+        if completed.returncode == 0:
+            completed = subprocess.run([*self.command, "kill"], capture_output=True, cwd=cwd)
+            assert (
+                completed.returncode == 0
+            ), f"Failed to stop dmypy: {completed.returncode}\n{completed.stdout.decode()}\n{completed.stderr.decode()}"
 
 
 if TYPE_CHECKING:
     _RO: protocols.RunOptions[protocols.P_Scenario] = cast(RunOptions[protocols.P_Scenario], None)
 
-    _EMR: protocols.ProgramRunner = cast(ExternalMypyRunner, None)
-    _SPM: protocols.ProgramRunner = cast(SameProcessMypyRunner, None)
-    _EDMR: protocols.ProgramRunner = cast(ExternalDaemonMypyRunner, None)
+    _EMR: protocols.P_ProgramRunner = cast(ExternalMypyRunner[protocols.P_Scenario], None)
+    _SPM: protocols.P_ProgramRunner = cast(SameProcessMypyRunner[protocols.P_Scenario], None)
+    _EDMR: protocols.P_ProgramRunner = cast(ExternalDaemonMypyRunner[protocols.P_Scenario], None)
+    _MC: protocols.P_NoticeChecker = cast(MypyChecker[protocols.P_Scenario], None)
+    _DC: protocols.P_NoticeChecker = cast(DaemonMypyChecker[protocols.P_Scenario], None)

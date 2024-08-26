@@ -107,40 +107,32 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
         *,
         _change_expectations: Callable[[], None] | None = None,
     ) -> None:
-        def make_expectations(
-            scenario_runner: protocols.ScenarioRunner[protocols.T_Scenario],
-            options: protocols.RunOptions[protocols.T_Scenario],
-        ) -> protocols.Expectations[protocols.T_Scenario]:
-            return self.make_expectations(
-                scenario_runner=scenario_runner,
-                options=options,
-                change_expectations=_change_expectations,
-            )
+        def setup_expectations(
+            *, options: protocols.RunOptions[protocols.T_Scenario]
+        ) -> protocols.ExpectationsMaker[protocols.T_Scenario]:
+            if _change_expectations is not None:
+                _change_expectations()
 
-        return self.scenario_runner.run_and_check(make_expectations)
+            return self.make_expectations
+
+        return self.scenario_runner.run_and_check(setup_expectations)
 
     def run_and_check_after(self, action: Callable[[], None]) -> None:
         self.run_and_check(_change_expectations=action)
 
     def make_expectations(
-        self,
-        *,
-        scenario_runner: protocols.ScenarioRunner[protocols.T_Scenario],
-        options: protocols.RunOptions[protocols.T_Scenario],
-        change_expectations: Callable[[], None] | None,
+        self, *, notice_checker: protocols.NoticeChecker[protocols.T_Scenario]
     ) -> protocols.Expectations[protocols.T_Scenario]:
-        if change_expectations is not None:
-            change_expectations()
-
-        program_notices = scenario_runner.scenario.generate_program_notices()
+        root_dir = notice_checker.runner.options.cwd
+        program_notices = notice_checker.runner.options.scenario_runner.generate_program_notices()
 
         return expectations.Expectations(
-            options=options,
-            expect_fail=scenario_runner.scenario.expect_fail,
+            notice_checker=notice_checker,
+            expect_fail=self.scenario_runner.scenario.expects.failure,
             expect_stderr="",
             expect_notices=program_notices.set_files(
                 {
-                    (location := scenario_runner.scenario.root_dir / path): known.notices(
+                    (location := root_dir / path): known.notices(
                         into=program_notices.generate_notices_for_location(location)
                     )
                     for path, known in self._known_files.items()
@@ -148,12 +140,20 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
             ),
         )
 
+    def expect_failure(self) -> Self:
+        self.scenario_runner.scenario.expects.failure = True
+        return self
+
+    def expect_success(self) -> Self:
+        self.scenario_runner.scenario.expects.failure = False
+        return self
+
     def daemon_should_not_restart(self) -> Self:
-        self.scenario_runner.scenario.expect_dmypy_restarted = False
+        self.scenario_runner.scenario.expects.daemon_restarted = False
         return self
 
     def daemon_should_restart(self) -> Self:
-        self.scenario_runner.scenario.expect_dmypy_restarted = True
+        self.scenario_runner.scenario.expects.daemon_restarted = True
         return self
 
 

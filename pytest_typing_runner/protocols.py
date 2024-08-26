@@ -40,19 +40,56 @@ class RunCleaners(Protocol):
 
 class RunOptions(Protocol[T_Scenario]):
     """
-    Used to represent the options used to run a type checker. This is a mutable object
-    so that the scenario runner may modify it before it is used
+    Used to represent the options used to run a type checker
     """
 
-    scenario: T_Scenario
-    typing_strategy: Strategy
-    cwd: pathlib.Path
-    runner: ProgramRunner
-    args: MutableSequence[str]
-    check_paths: MutableSequence[str]
-    do_followup: bool
-    environment_overrides: MutableMapping[str, str | None]
-    cleaners: RunCleaners
+    @property
+    def scenario_runner(self) -> ScenarioRunner[T_Scenario]:
+        """
+        The scenario runner
+        """
+
+    @property
+    def cwd(self) -> pathlib.Path:
+        """
+        The working directory to run the type checker from
+        """
+
+    @property
+    def make_program_runner(self) -> ProgramRunnerMaker[T_Scenario]:
+        """
+        Make the specific type checker to run
+        """
+
+    @property
+    def args(self) -> MutableSequence[str]:
+        """
+        The arguments to pass into the type checker
+        """
+
+    @property
+    def check_paths(self) -> MutableSequence[str]:
+        """
+        The paths to check with the type checker
+        """
+
+    @property
+    def do_followup(self) -> bool:
+        """
+        Return whether followup runs should be done
+        """
+
+    @property
+    def environment_overrides(self) -> MutableMapping[str, str | None]:
+        """
+        Overrides of environment variables for when running the type checker
+        """
+
+    @property
+    def cleaners(self) -> RunCleaners:
+        """
+        Registry of cleanup functions for after the test has run
+        """
 
 
 class FileModifier(Protocol):
@@ -70,16 +107,31 @@ class FileModifier(Protocol):
     def __call__(self, *, path: str, content: str | None) -> None: ...
 
 
-class RunResult(Protocol[T_Scenario]):
+class NoticeChecker(Protocol[T_Scenario]):
     """
-    Used to represent the options used to run a type checker and the result from doing so
+    Used to represent a function that can be wrapped to
+    provide a function for checking notices
     """
 
     @property
-    def options(self) -> RunOptions[T_Scenario]:
+    def result(self) -> RunResult:
         """
-        The scenario that is being tested
+        The result to check against
         """
+
+    @property
+    def runner(self) -> ProgramRunner[T_Scenario]:
+        """
+        The runner that was used to make the result
+        """
+
+    def check(self, expected_notices: ProgramNotices, /) -> None: ...
+
+
+class RunResult(Protocol):
+    """
+    Used to represent the result of running a type checker
+    """
 
     @property
     def exit_code(self) -> int:
@@ -124,33 +176,60 @@ class RunnerConfig(Protocol):
         """
 
 
-class ProgramRunner(Protocol):
+class ProgramRunner(Protocol[T_Scenario]):
     """
     Used to run the static type checker
     """
 
-    def run(
-        self, *, scenario: T_Scenario, options: RunOptions[T_Scenario]
-    ) -> RunResult[T_Scenario]:
+    @property
+    def options(self) -> RunOptions[T_Scenario]:
         """
-        Run the static type checker and return a result
+        The options for this run
         """
 
-    def check_notices(
-        self,
-        *,
-        scenario: T_Scenario,
-        result: RunResult[T_Scenario],
-        expected_notices: ProgramNotices,
-    ) -> None:
+    def run(self) -> NoticeChecker[T_Scenario]:
         """
-        Used to check the output against the notices in the expectations
+        Run the static type checker and return a result
         """
 
     def short_display(self) -> str:
         """
         Return a string to represent the command that was run
         """
+
+
+class ProgramRunnerMaker(Protocol[T_Scenario]):
+    """
+    Used to contruct a program runner
+    """
+
+    @property
+    def default_args(self) -> Sequence[str]:
+        """
+        The default args to start the program runner with
+        """
+
+    @property
+    def do_followups(self) -> bool:
+        """
+        The default for whether the program runner should be used in a followup run
+        """
+
+    @property
+    def is_daemon(self) -> bool:
+        """
+        Whether this program runner uses a daemon
+        """
+
+    def __call__(self, *, options: RunOptions[T_Scenario]) -> ProgramRunner[T_Scenario]: ...
+
+
+class ProgramRunnerChooser(Protocol):
+    """
+    Used to choose which program runner to use
+    """
+
+    def __call__(self, *, scenario: T_Scenario) -> ProgramRunnerMaker[T_Scenario]: ...
 
 
 class Strategy(Protocol):
@@ -161,25 +240,9 @@ class Strategy(Protocol):
         """
 
     @property
-    def is_daemon(self) -> bool:
+    def program_runner_chooser(self) -> ProgramRunnerChooser:
         """
-        Whether this strategy makes use of a background daemon process
-        """
-
-    def make_program_runner(self) -> ProgramRunner:
-        """
-        Create a program runner for this strategy
-        """
-
-    def make_default_args(self) -> list[str]:
-        """
-        Return the default args for this runner
-        """
-
-    @property
-    def do_followups(self) -> bool:
-        """
-        Return whether there is a point in doing followup runs with this runner
+        Used to make a program runner
         """
 
 
@@ -188,7 +251,7 @@ class StrategyMaker(Protocol):
     Used to construct an object implementing :protocol:`Strategy`
     """
 
-    def __call__(self, *, config: RunnerConfig) -> Strategy: ...
+    def __call__(self) -> Strategy: ...
 
 
 class StrategyRegistry(Protocol):
@@ -269,13 +332,7 @@ class ScenarioRun(Protocol[T_Scenario]):
         """
 
     @property
-    def options(self) -> RunOptions[T_Scenario]:
-        """
-        The options that were used for the run
-        """
-
-    @property
-    def result(self) -> RunResult[T_Scenario]:
+    def checker(self) -> NoticeChecker[T_Scenario]:
         """
         The result from running the type checker
         """
@@ -330,8 +387,7 @@ class ScenarioRuns(Protocol[T_Scenario]):
     def add_run(
         self,
         *,
-        options: RunOptions[T_Scenario],
-        result: RunResult[T_Scenario],
+        checker: NoticeChecker[T_Scenario],
         expectations: Expectations[T_Scenario],
         expectation_error: Exception | None,
     ) -> ScenarioRun[T_Scenario]:
@@ -651,7 +707,13 @@ class Expectations(Protocol[T_Scenario]):
     This objects knows what to expect from running the static type checker
     """
 
-    def check_results(self, result: RunResult[T_Scenario]) -> None:
+    @property
+    def notice_checker(self) -> NoticeChecker[T_Scenario]:
+        """
+        The result to check
+        """
+
+    def check(self) -> None:
         """
         Used to check the result against these expectations
         """
@@ -663,10 +725,32 @@ class ExpectationsMaker(Protocol[T_Scenario]):
     """
 
     def __call__(
-        self,
-        scenario_runner: ScenarioRunner[T_Scenario],
-        options: RunOptions[T_Scenario],
+        self, *, notice_checker: NoticeChecker[T_Scenario]
     ) -> Expectations[T_Scenario]: ...
+
+
+class ExpectationsSetup(Protocol[T_Scenario]):
+    """
+    Used to setup an expectations maker
+    """
+
+    def __call__(self, *, options: RunOptions[T_Scenario]) -> ExpectationsMaker[T_Scenario]: ...
+
+
+class Expects(Protocol):
+    """
+    Holds boolean expectations
+    """
+
+    failure: bool
+    """
+    Whether failure is expected
+    """
+
+    daemon_restarted: bool
+    """
+    Whether a daemon restart is expected
+    """
 
 
 class Scenario(Protocol):
@@ -682,44 +766,34 @@ class Scenario(Protocol):
     implementation to use for a particular scope.
     """
 
-    same_process: bool
-    typing_strategy: Strategy
-    root_dir: pathlib.Path
-    check_paths: list[str]
-    expect_fail: bool
-    expect_dmypy_restarted: bool
-
-    def execute_static_checking(
-        self: T_Scenario, file_modification: FileModifier, options: RunOptions[T_Scenario]
-    ) -> RunResult[T_Scenario]:
+    @property
+    def expects(self) -> Expects:
         """
-        Called to use the run options to run a type checker and get a result
+        Boolean expectations
         """
 
-    def parse_notices_from_file(
-        self, content: str, /, *, into: FileNotices
-    ) -> tuple[str, FileNotices]:
+    @property
+    def same_process(self) -> bool:
         """
-        Used to transform and parse content for any expected notices in the comments
-        """
-
-    def normalise_program_runner_notice(
-        self: T_Scenario, options: RunOptions[T_Scenario], notice: ProgramNotice, /
-    ) -> ProgramNotice:
-        """
-        Used to normalise each notice parsed from the output of the program runner
+        Whether to run the type checker in the same process
         """
 
-    def check_results(
-        self: T_Scenario, result: RunResult[T_Scenario], expectations: Expectations[T_Scenario]
-    ) -> None:
+    @property
+    def root_dir(self) -> pathlib.Path:
         """
-        Called to check the result against expectations
+        The root directory for all files in the scenario
         """
 
-    def generate_program_notices(self) -> ProgramNotices:
+    @property
+    def check_paths(self) -> MutableSequence[str]:
         """
-        Return an object that satisfies an empty :protocol:`ProgramNotices`
+        The files the type checker should specifically taret
+        """
+
+    @property
+    def typing_strategy(self) -> Strategy:
+        """
+        A typing strategy specific to this scenario
         """
 
 
@@ -740,12 +814,25 @@ class ScenarioRunner(Protocol[T_Scenario]):
         """
 
     @property
+    def program_runner_maker(self) -> ProgramRunnerMaker[T_Scenario]:
+        """
+        Constructor for making a program runner
+        """
+
+    @property
     def cleaners(self) -> RunCleaners:
         """
         An object to register cleanup functions for the end of the run
         """
 
-    def run_and_check(self, make_expectations: ExpectationsMaker[T_Scenario]) -> None:
+    def execute_static_checking(
+        self, *, options: RunOptions[T_Scenario]
+    ) -> NoticeChecker[T_Scenario]:
+        """
+        Called to use the run options to run a type checker and get a result
+        """
+
+    def run_and_check(self, setup_expectations: ExpectationsSetup[T_Scenario]) -> None:
         """
         Used to do a run of a type checker and check against the provided expectations
         """
@@ -780,6 +867,25 @@ class ScenarioRunner(Protocol[T_Scenario]):
     def file_modification(self, path: str, content: str | None) -> None:
         """
         Used to modify a file for the scenario and record it on the runs
+        """
+
+    def normalise_program_runner_notice(
+        self, options: RunOptions[T_Scenario], notice: ProgramNotice, /
+    ) -> ProgramNotice:
+        """
+        Used to normalise each notice parsed from the output of the program runner
+        """
+
+    def parse_notices_from_file(
+        self, content: str, /, *, into: FileNotices
+    ) -> tuple[str, FileNotices]:
+        """
+        Used to transform and parse content for any expected notices in the comments
+        """
+
+    def generate_program_notices(self) -> ProgramNotices:
+        """
+        Return an object that satisfies an empty :protocol:`ProgramNotices`
         """
 
 
@@ -847,6 +953,7 @@ if TYPE_CHECKING:
     P_ScenarioRunner = ScenarioRunner[P_Scenario]
     P_ScenarioFileMaker = ScenarioFileMaker[P_ScenarioFile]
     P_ExpectationsMaker = ExpectationsMaker[P_Scenario]
+    P_ExpectationsSetup = ExpectationsSetup
     P_ScenarioRunnerMaker = ScenarioRunnerMaker[P_Scenario]
 
     P_Severity = Severity
@@ -864,9 +971,12 @@ if TYPE_CHECKING:
 
     P_FileModifier = FileModifier
     P_RunOptions = RunOptions[P_Scenario]
-    P_RunResult = RunResult[P_Scenario]
+    P_RunResult = RunResult
+    P_NoticeChecker = NoticeChecker[P_Scenario]
     P_RunnerConfig = RunnerConfig
-    P_ProgramRunner = ProgramRunner
+    P_ProgramRunner = ProgramRunner[P_Scenario]
+    P_ProgramRunnerMaker = ProgramRunnerMaker[P_Scenario]
+    P_ProgramRunnerChooser = ProgramRunnerChooser
     P_RunCleaner = RunCleaner
     P_RunCleaners = RunCleaners
     P_Strategy = Strategy
@@ -874,4 +984,4 @@ if TYPE_CHECKING:
     P_StrategyRegistry = StrategyRegistry
 
     _FM: P_FileModifier = cast(P_ScenarioRunner, None).file_modification
-    _PNFF: FileNoticesParser = cast(Scenario, None).parse_notices_from_file
+    _PNFF: FileNoticesParser = cast(P_ScenarioRunner, None).parse_notices_from_file

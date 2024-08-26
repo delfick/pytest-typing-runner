@@ -9,42 +9,30 @@ from . import notices, protocols
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class RunResult(Generic[protocols.T_Scenario]):
+class RunResult:
     """
     A concrete implementation of protocols.RunResult.
     """
 
-    options: protocols.RunOptions[protocols.T_Scenario]
     exit_code: int
     stdout: str
     stderr: str
 
-    @classmethod
-    def from_options(
-        cls,
-        options: protocols.RunOptions[protocols.T_Scenario],
-        exit_code: int,
-        *,
-        stdout: str,
-        stderr: str,
-    ) -> Self:
-        return cls(options=options, exit_code=exit_code, stdout=stdout, stderr=stderr)
-
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Expectations(Generic[protocols.T_Scenario]):
-    options: protocols.RunOptions[protocols.T_Scenario]
+    notice_checker: protocols.NoticeChecker[protocols.T_Scenario]
 
-    expect_fail: bool
+    expect_fail: bool = False
     expect_stderr: str = ""
     expect_notices: protocols.ProgramNotices = dataclasses.field(
         default_factory=notices.ProgramNotices
     )
 
-    def check_results(self, result: protocols.RunResult[protocols.T_Scenario]) -> None:
-        self.options.runner.check_notices(
-            scenario=result.options.scenario, result=result, expected_notices=self.expect_notices
-        )
+    def check(self) -> None:
+        self.notice_checker.check(self.expect_notices)
+
+        result = self.notice_checker.result
         assert result.stderr == self.expect_stderr
         if self.expect_fail or any(
             notice.severity == notices.ErrorSeverity("") for notice in self.expect_notices
@@ -54,12 +42,10 @@ class Expectations(Generic[protocols.T_Scenario]):
             assert result.exit_code == 0
 
     @classmethod
-    def success_expectation(
-        cls,
-        scenario_runner: protocols.ScenarioRunner[protocols.T_Scenario],
-        options: protocols.RunOptions[protocols.T_Scenario],
-    ) -> Self:
-        return cls(options=options, expect_fail=False)
+    def setup_for_success(
+        cls, *, options: protocols.RunOptions[protocols.T_Scenario]
+    ) -> type[Self]:
+        return cls
 
 
 def normalise_notices(
@@ -125,6 +111,6 @@ def compare_notices(diff: protocols.DiffNotices) -> None:
 
 
 if TYPE_CHECKING:
-    _RR: protocols.RunResult[protocols.P_Scenario] = cast(RunResult[protocols.P_Scenario], None)
+    _RR: protocols.RunResult = cast(RunResult, None)
 
     _E: protocols.P_Expectations = cast(Expectations[protocols.P_Scenario], None)

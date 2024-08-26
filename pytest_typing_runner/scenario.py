@@ -49,8 +49,7 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
     is_first: bool
     is_followup: bool
     scenario: protocols.T_Scenario
-    options: protocols.RunOptions[protocols.T_Scenario]
-    result: protocols.RunResult[protocols.T_Scenario]
+    checker: protocols.NoticeChecker[protocols.T_Scenario]
     expectations: protocols.Expectations[protocols.T_Scenario]
     expectation_error: Exception | None
     file_modifications: Sequence[tuple[str, str]]
@@ -62,12 +61,19 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
         if self.is_followup:
             yield "> [followup run]"
         else:
-            yield f"> {self.options.runner.short_display()} {' '.join(self.options.args)} {' '.join(self.options.check_paths)}"
+            command = " ".join(
+                [
+                    self.checker.runner.short_display(),
+                    *self.checker.runner.options.args,
+                    *self.checker.runner.options.check_paths,
+                ]
+            )
+            yield f"> {command}"
 
-        yield f"| exit_code={self.result.exit_code}"
-        for line in self.result.stdout.split("\n"):
+        yield f"| exit_code={self.checker.result.exit_code}"
+        for line in self.checker.result.stdout.split("\n"):
             yield f"| stdout: {line}"
-        for line in self.result.stderr.split("\n"):
+        for line in self.checker.result.stderr.split("\n"):
             yield f"| stderr: {line}"
         if self.expectation_error:
             yield f"!!! {self.expectation_error}"
@@ -106,8 +112,7 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
     def add_run(
         self,
         *,
-        options: protocols.RunOptions[protocols.T_Scenario],
-        result: protocols.RunResult[protocols.T_Scenario],
+        checker: protocols.NoticeChecker[protocols.T_Scenario],
         expectations: protocols.Expectations[protocols.T_Scenario],
         expectation_error: Exception | None,
     ) -> protocols.ScenarioRun[protocols.T_Scenario]:
@@ -120,9 +125,8 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
         run = ScenarioRun(
             scenario=self.scenario,
             is_first=not self.has_runs,
-            is_followup=options.do_followup and len(self._runs) == 1,
-            options=options,
-            result=result,
+            is_followup=checker.runner.options.do_followup and len(self._runs) == 1,
+            checker=checker,
             expectations=expectations,
             expectation_error=expectation_error,
             file_modifications=file_modifications,
@@ -131,7 +135,13 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
         return run
 
 
-@dataclasses.dataclass(kw_only=True)
+@dataclasses.dataclass
+class Expects:
+    failure: bool = False
+    daemon_restarted: bool = False
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class Scenario:
     """
     Default implementation of the protocols.Scenario
@@ -140,56 +150,17 @@ class Scenario:
     root_dir: pathlib.Path
     same_process: bool
     typing_strategy: protocols.Strategy
+
+    expects: Expects = dataclasses.field(init=False, default_factory=Expects)
     check_paths: list[str] = dataclasses.field(default_factory=lambda: ["."])
-    expect_fail: bool = False
-    expect_dmypy_restarted: bool = False
 
     @classmethod
     def create(cls, config: protocols.RunnerConfig, root_dir: pathlib.Path) -> Self:
         return cls(
             root_dir=root_dir,
             same_process=config.same_process,
-            typing_strategy=config.typing_strategy_maker(config=config),
+            typing_strategy=config.typing_strategy_maker(),
         )
-
-    def execute_static_checking(
-        self: protocols.T_Scenario,
-        file_modification: protocols.FileModifier,
-        options: protocols.RunOptions[protocols.T_Scenario],
-    ) -> protocols.RunResult[protocols.T_Scenario]:
-        """
-        Default implementation returns the result of running the runner on options with those options
-        """
-        return options.runner.run(scenario=self, options=options)
-
-    def check_results(
-        self: protocols.T_Scenario,
-        result: protocols.RunResult[protocols.T_Scenario],
-        expectations: protocols.Expectations[protocols.T_Scenario],
-    ) -> None:
-        """
-        Default implementation passes the result into the expectations
-        """
-        expectations.check_results(result=result)
-
-    def parse_notices_from_file(
-        self, content: str, /, *, into: protocols.FileNotices
-    ) -> tuple[str, protocols.FileNotices]:
-        return parse.FileContent().parse(textwrap.dedent(content), into=into)
-
-    def normalise_program_runner_notice(
-        self: protocols.T_Scenario,
-        options: protocols.RunOptions[protocols.T_Scenario],
-        notice: protocols.ProgramNotice,
-        /,
-    ) -> protocols.ProgramNotice:
-        """
-        No extra normalisation by default
-        """
-        return notice
-
-    def generate_program_notices(self) -> protocols.ProgramNotices:
-        return notices.ProgramNotices()
 
 
 class ScenarioRunner(Generic[protocols.T_Scenario]):
@@ -201,6 +172,9 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
     ) -> None:
         self.scenario = scenario_maker(config=config, root_dir=root_dir)
+        self.program_runner_maker = self.scenario.typing_strategy.program_runner_chooser(
+            scenario=self.scenario
+        )
         self.runs = self.create_scenario_runs()
         self.cleaners = RunCleaners()
 
@@ -252,9 +226,17 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
 
         self.runs.add_file_modification(path, action)
 
+    def execute_static_checking(
+        self, options: protocols.RunOptions[protocols.T_Scenario]
+    ) -> protocols.NoticeChecker[protocols.T_Scenario]:
+        """
+        Default implementation returns the result of running the runner on options with those options
+        """
+        return options.make_program_runner(options=options).run()
+
     def run_and_check(
         self,
-        make_expectations: protocols.ExpectationsMaker[protocols.T_Scenario],
+        setup_expectations: protocols.ExpectationsSetup[protocols.T_Scenario],
         *,
         _options: protocols.RunOptions[protocols.T_Scenario] | None = None,
     ) -> None:
@@ -263,48 +245,65 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         else:
             options = self.determine_options()
 
-        expectations = make_expectations(self, options)
-        result = self.scenario.execute_static_checking(self.file_modification, options)
+        make_expectations = setup_expectations(options=options)
+        checker = self.execute_static_checking(options=options)
+        expectations = make_expectations(notice_checker=checker)
 
         try:
-            self.scenario.check_results(result, expectations)
+            expectations.check()
         except Exception as err:
             self.runs.add_run(
-                options=options,
-                result=result,
+                checker=checker,
                 expectations=expectations,
                 expectation_error=err,
             )
             raise
         else:
             run = self.runs.add_run(
-                options=options,
-                result=result,
+                checker=checker,
                 expectations=expectations,
                 expectation_error=None,
             )
 
         if options.do_followup and run.is_first:
-            self.run_and_check(
-                lambda scenario, options: expectations,
-                _options=options,
+            repeat_expectations: protocols.ExpectationsSetup[protocols.T_Scenario] = (
+                lambda options: lambda notice_checker: expectations
             )
+            self.run_and_check(repeat_expectations, _options=options)
 
     def determine_options(self) -> runner.RunOptions[protocols.T_Scenario]:
         """
         Default implementation uses the plugin config to determine the bare essential options
         """
         return runner.RunOptions(
-            scenario=self.scenario,
-            typing_strategy=self.scenario.typing_strategy,
-            runner=self.scenario.typing_strategy.make_program_runner(),
+            scenario_runner=self,
+            make_program_runner=self.program_runner_maker,
             cwd=self.scenario.root_dir,
             check_paths=self.scenario.check_paths,
-            args=self.scenario.typing_strategy.make_default_args(),
-            do_followup=self.scenario.typing_strategy.do_followups,
+            args=list(self.program_runner_maker.default_args),
+            do_followup=self.program_runner_maker.do_followups,
             environment_overrides={},
             cleaners=self.cleaners,
         )
+
+    def normalise_program_runner_notice(
+        self,
+        options: protocols.RunOptions[protocols.T_Scenario],
+        notice: protocols.ProgramNotice,
+        /,
+    ) -> protocols.ProgramNotice:
+        """
+        No extra normalisation by default
+        """
+        return notice
+
+    def parse_notices_from_file(
+        self, content: str, /, *, into: protocols.FileNotices
+    ) -> tuple[str, protocols.FileNotices]:
+        return parse.FileContent().parse(textwrap.dedent(content), into=into)
+
+    def generate_program_notices(self) -> protocols.ProgramNotices:
+        return notices.ProgramNotices()
 
 
 if TYPE_CHECKING:
@@ -321,5 +320,6 @@ if TYPE_CHECKING:
     _CSM: protocols.ScenarioMaker[C_Scenario] = C_Scenario.create
     _CSRU: protocols.ScenarioRunner[C_Scenario] = cast(C_ScenarioRunner, None)
 
+    _E: protocols.Expects = cast(Expects, None)
     _RCS: protocols.RunCleaners = cast(RunCleaners, None)
-    _PNFF: protocols.FileNoticesParser = cast(C_Scenario, None).parse_notices_from_file
+    _PNFF: protocols.FileNoticesParser = cast(C_ScenarioRunner, None).parse_notices_from_file

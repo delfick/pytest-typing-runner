@@ -2,8 +2,8 @@ import argparse
 import dataclasses
 import importlib.metadata
 import textwrap
-from collections.abc import Callable, MutableMapping
-from typing import TYPE_CHECKING, cast
+from collections.abc import Callable, MutableMapping, Sequence
+from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self
 
@@ -20,10 +20,7 @@ class NoStrategiesRegistered(errors.PyTestTypingRunnerException):
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Strategy:
     program_short: str
-    make_program_runner: Callable[[], protocols.ProgramRunner]
-    make_default_args: Callable[[], list[str]]
-    do_followups: bool
-    is_daemon: bool
+    program_runner_chooser: protocols.ProgramRunnerChooser
 
 
 @dataclasses.dataclass
@@ -136,52 +133,92 @@ class StrategyRegistry:
         )
 
 
-def _make_no_incremental_strategy(*, config: protocols.RunnerConfig) -> protocols.Strategy:
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class MypyChoice(Generic[protocols.T_Scenario]):
+    default_args: Sequence[str]
+    do_followups: bool
+    same_process: bool
+    is_daemon: bool = dataclasses.field(init=False, default=False)
+
+    def __call__(
+        self, *, options: protocols.RunOptions[protocols.T_Scenario]
+    ) -> protocols.ProgramRunner[protocols.T_Scenario]:
+        if self.same_process:
+            return runner.SameProcessMypyRunner(options=options)
+        else:
+            return runner.ExternalMypyRunner(options=options)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class DaemonMypyChoice(MypyChoice[protocols.T_Scenario]):
+    is_daemon: bool = dataclasses.field(init=False, default=True)
+
+    def __call__(
+        self, *, options: protocols.RunOptions[protocols.T_Scenario]
+    ) -> protocols.ProgramRunner[protocols.T_Scenario]:
+        return runner.ExternalDaemonMypyRunner(options=options)
+
+
+def _make_no_incremental_strategy() -> protocols.Strategy:
     """
     - mypy is run only once for each run with --no-incremental
     """
-    return Strategy(
-        program_short="mypy",
-        make_program_runner=(
-            runner.SameProcessMypyRunner if config.same_process else runner.ExternalMypyRunner
-        ),
-        make_default_args=lambda: ["--no-incremental"],
-        do_followups=False,
-        is_daemon=False,
-    )
+
+    def choose(
+        *, scenario: protocols.T_Scenario
+    ) -> protocols.ProgramRunnerMaker[protocols.T_Scenario]:
+        return MypyChoice(
+            default_args=["--no-incremental"],
+            do_followups=False,
+            same_process=scenario.same_process,
+        )
+
+    if TYPE_CHECKING:
+        _C: protocols.ProgramRunnerChooser = choose
+
+    return Strategy(program_short="mypy", program_runner_chooser=choose)
 
 
-def _make_incremental_strategy(*, config: protocols.RunnerConfig) -> protocols.Strategy:
+def _make_incremental_strategy() -> protocols.Strategy:
     """
     - mypy is run twice for each run with --incremental.
     - First with an empty cache relative to the temporary directory
     - and again after that cache is made.
     """
-    return Strategy(
-        program_short="mypy",
-        make_program_runner=(
-            runner.SameProcessMypyRunner if config.same_process else runner.ExternalMypyRunner
-        ),
-        make_default_args=lambda: ["--incremental"],
-        do_followups=True,
-        is_daemon=False,
-    )
+
+    def choose(
+        *, scenario: protocols.T_Scenario
+    ) -> protocols.ProgramRunnerMaker[protocols.T_Scenario]:
+        return MypyChoice(
+            default_args=["--incremental"],
+            do_followups=True,
+            same_process=scenario.same_process,
+        )
+
+    if TYPE_CHECKING:
+        _C: protocols.ProgramRunnerChooser = choose
+
+    return Strategy(program_short="mypy", program_runner_chooser=choose)
 
 
-def _make_dmypy_strategy(*, config: protocols.RunnerConfig) -> protocols.Strategy:
+def _make_dmypy_strategy() -> protocols.Strategy:
     """
     - A new dmypy is started and run twice for each run
     """
-    if config.same_process:
-        raise ValueError("The DAEMON strategy cannot also be in run in the same pytest process")
 
-    return Strategy(
-        program_short="mypy",
-        make_program_runner=runner.ExternalDaemonMypyRunner,
-        make_default_args=lambda: ["run", "--"],
-        do_followups=True,
-        is_daemon=True,
-    )
+    def choose(
+        *, scenario: protocols.T_Scenario
+    ) -> protocols.ProgramRunnerMaker[protocols.T_Scenario]:
+        return DaemonMypyChoice(
+            default_args=["run", "--"],
+            do_followups=True,
+            same_process=scenario.same_process,
+        )
+
+    if TYPE_CHECKING:
+        _C: protocols.ProgramRunnerChooser = choose
+
+    return Strategy(program_short="mypy", program_runner_chooser=choose)
 
 
 def register_default_strategies(registry: protocols.StrategyRegistry, /) -> None:
@@ -205,5 +242,7 @@ def register_default_strategies(registry: protocols.StrategyRegistry, /) -> None
 
 if TYPE_CHECKING:
     _SR: protocols.StrategyRegistry = cast(StrategyRegistry, None)
-    _S: protocols.Strategy = cast(Strategy, None)
+    _S: protocols.P_Strategy = cast(Strategy, None)
     _RDS: protocols.StrategyRegisterer = register_default_strategies
+    _MC: protocols.P_ProgramRunnerMaker = cast(MypyChoice[protocols.P_Scenario], None)
+    _DC: protocols.P_ProgramRunnerMaker = cast(DaemonMypyChoice[protocols.P_Scenario], None)
