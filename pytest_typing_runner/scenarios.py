@@ -17,7 +17,7 @@ class RunnerConfig:
     """
     Holds the defaults received from pytest command line options
 
-    Implements of :protocol:`pytest_typing_runner.protocols.RunnerConfig`
+    Implements :protocol:`pytest_typing_runner.protocols.RunnerConfig`
 
     :param same_process:
         The default used for `same_process`` on the Scenario.
@@ -36,7 +36,7 @@ class Expects:
     """
     Holds boolean expectations from running the type checker in the scenario
 
-    Implements of :protocol:`pytest_typing_runner.protocols.Expects`
+    Implements :protocol:`pytest_typing_runner.protocols.Expects`
 
     :param failure: Whether the type checker is expected to fail
     :param daemon_restarted:
@@ -58,7 +58,7 @@ class Scenario:
 
     The other objects are generic to the specific implementation of Scenario.
 
-    Implements of :protocol:`pytest_typing_runner.protocols.Scenario`
+    Implements :protocol:`pytest_typing_runner.protocols.Scenario`
 
     :param root_dir: The directory to place all the files in for the scenario.
     :param same_process: Whether to run the type checker in the same process or not
@@ -85,7 +85,9 @@ class RunCleaners:
     """
     Object that holds cleanup functions to be run at the end of the test.
 
-    Implements of :protocol:`pytest_typing_runner.protocols.RunCleaners`
+    Implements :protocol:`pytest_typing_runner.protocols.RunCleaners`
+
+    .. automethod:: __iter__
     """
 
     _cleaners: MutableMapping[str, protocols.RunCleaner] = dataclasses.field(
@@ -93,9 +95,21 @@ class RunCleaners:
     )
 
     def add(self, unique_identifier: str, cleaner: protocols.RunCleaner) -> None:
+        """
+        Registers a cleaner to some unique identifier.
+
+        Note if the identifier has already been registered then the cleaner at
+        that identifier will be silently replaced
+
+        :param unique_identifier: The name of the cleaner
+        :param cleaner: The callable that performs some cleanup
+        """
         self._cleaners[unique_identifier] = cleaner
 
     def __iter__(self) -> Iterator[protocols.RunCleaner]:
+        """
+        Yield the registered cleaners in the order they were added.
+        """
         yield from self._cleaners.values()
 
 
@@ -104,7 +118,7 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
     """
     Holds the information for a single run of the type checker in the test.
 
-    Implements of :protocol:`pytest_typing_runner.protocols.ScenarioRun`
+    Implements :protocol:`pytest_typing_runner.protocols.ScenarioRun`
     """
 
     is_first: bool
@@ -145,7 +159,7 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
     """
     A collection of scenario runs for a test.
 
-    Implements of :protocol:`pytest_typing_runner.protocols.ScenarioRuns`
+    Implements :protocol:`pytest_typing_runner.protocols.ScenarioRuns`
     """
 
     scenario: protocols.T_Scenario
@@ -203,7 +217,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
     """
     Holds logic for creating and using objects that hold onto the scenario.
 
-    Implements of :protocol:`pytest_typing_runner.protocols.ScenarioRuns`
+    Implements :protocol:`pytest_typing_runner.protocols.ScenarioRuns`
     """
 
     scenario: protocols.T_Scenario

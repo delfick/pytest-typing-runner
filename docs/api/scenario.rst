@@ -22,3 +22,10 @@ The default implementation of this protocol is:
 .. autoclass:: pytest_typing_runner.scenarios.Scenario
     :members:
     :member-order: bysource
+
+The scenario runner
+-------------------
+
+.. autoclass:: pytest_typing_runner.scenarios.RunCleaners
+    :members:
+    :member-order: bysource
