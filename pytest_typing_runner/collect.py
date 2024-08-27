@@ -4,8 +4,7 @@ from collections.abc import Iterator
 import pytest
 from _pytest.config.argparsing import Parser
 
-from . import protocols, strategies
-from .scenario import RunnerConfig, Scenario, ScenarioRunner, ScenarioRuns
+from . import protocols, scenarios, strategies
 
 
 @pytest.fixture
@@ -13,7 +12,7 @@ def typing_runner_config(pytestconfig: pytest.Config) -> protocols.RunnerConfig:
     """
     Fixture to get a RunnerConfig with all the relevant settings from the pytest config
     """
-    return RunnerConfig(
+    return scenarios.RunnerConfig(
         same_process=pytestconfig.option.typing_same_process,
         typing_strategy_maker=pytestconfig.option.typing_strategy,
     )
@@ -21,26 +20,26 @@ def typing_runner_config(pytestconfig: pytest.Config) -> protocols.RunnerConfig:
 
 @pytest.fixture
 def typing_scenario_maker() -> protocols.ScenarioMaker[protocols.Scenario]:
-    return Scenario.create
+    return scenarios.Scenario.create
 
 
 @pytest.fixture
 def typing_scenario_runner_maker(
     typing_scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
 ) -> protocols.ScenarioRunnerMaker[protocols.T_Scenario]:
-    return ScenarioRunner.create
+    return scenarios.ScenarioRunner.create
 
 
 @pytest.fixture
 def typing_scenario_runs_maker(
     typing_scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
 ) -> protocols.ScenarioRunsMaker[protocols.T_Scenario]:
-    return ScenarioRuns
+    return scenarios.ScenarioRuns
 
 
 @pytest.fixture
 def typing_scenario_runner(
-    typing_runner_config: RunnerConfig,
+    typing_runner_config: protocols.RunnerConfig,
     typing_scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
     typing_scenario_runs_maker: protocols.ScenarioRunsMaker[protocols.T_Scenario],
     typing_scenario_runner_maker: protocols.ScenarioRunnerMaker[protocols.T_Scenario],
@@ -80,8 +79,8 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
     """
     if report.when == "call" and report.outcome == "failed":
         for name, val in report.user_properties:
-            if isinstance(val, ScenarioRunner):
-                val.add_to_pytest_report(name, report.sections)
+            if callable(add_to_pytest_report := getattr(val, "add_to_pytest_report", None)):
+                add_to_pytest_report(name, report.sections)
 
 
 def pytest_addoption(parser: Parser) -> None:

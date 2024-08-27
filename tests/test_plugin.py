@@ -3,18 +3,18 @@ import textwrap
 
 import pytest
 
-from pytest_typing_runner.scenario import ScenarioRunner
+from pytest_typing_runner import scenarios
 
 
 class TestPlugin:
     def test_it_can_create_scenario_fixture(self, pytester: pytest.Pytester) -> None:
         pytester.makepyfile(
             """
-            from pytest_typing_runner import Scenario, RunnerConfig, ScenarioRunner
+            from pytest_typing_runner import scenarios, protocols
 
-            def test_has_scenario(typing_scenario_runner: ScenarioRunner[Scenario]) -> None:
-                assert isinstance(typing_scenario_runner, ScenarioRunner)
-                assert isinstance(typing_scenario_runner.scenario, Scenario)
+            def test_has_scenario(typing_scenario_runner: protocols.ScenarioRunner[scenarios.Scenario]) -> None:
+                assert isinstance(typing_scenario_runner, scenarios.ScenarioRunner)
+                assert isinstance(typing_scenario_runner.scenario, scenarios.Scenario)
         """
         )
 
@@ -24,40 +24,40 @@ class TestPlugin:
     def test_it_can_change_class_used_for_scenario(self, pytester: pytest.Pytester) -> None:
         pytester.makepyfile(
             """
-            from pytest_typing_runner import Scenario, ScenarioRunner, protocols
+            from pytest_typing_runner import scenarios, protocols
             import dataclasses
             import pytest
 
 
-            def test_has_scenario(typing_scenario_runner: ScenarioRunner[Scenario]) -> None:
-                assert typing_scenario_runner.scenario.__class__ is Scenario
+            def test_has_scenario(typing_scenario_runner: protocols.ScenarioRunner[scenarios.Scenario]) -> None:
+                assert typing_scenario_runner.scenario.__class__ is scenarios.Scenario
 
             class TestOne:
                 @dataclasses.dataclass(frozen=True, kw_only=True)
-                class MyScenario(Scenario):
+                class MyScenario(scenarios.Scenario):
                     pass
 
                 @pytest.fixture()
                 def typing_scenario_maker(self) -> protocols.ScenarioMaker[MyScenario]:
                     return self.MyScenario.create
 
-                def test_has_scenario(self, typing_scenario_runner: "ScenarioRunner[TestOne.MyScenario]") -> None:
+                def test_has_scenario(self, typing_scenario_runner: protocols.ScenarioRunner[MyScenario]) -> None:
                     assert isinstance(typing_scenario_runner.scenario, self.MyScenario)
 
             class TestTwo:
                 @dataclasses.dataclass(frozen=True, kw_only=True)
-                class MyScenario2(Scenario):
+                class MyScenario2(scenarios.Scenario):
                     pass
 
                 @pytest.fixture()
                 def typing_scenario_maker(self) -> protocols.ScenarioMaker[MyScenario2]:
                     return self.MyScenario2.create
 
-                def test_has_scenario(self, typing_scenario_runner: "ScenarioRunner[TestTwo.MyScenario2]") -> None:
+                def test_has_scenario(self, typing_scenario_runner: "scenarios.ScenarioRunner[TestTwo.MyScenario2]") -> None:
                     assert isinstance(typing_scenario_runner.scenario, self.MyScenario2)
 
-            def test_has_scenario_again(typing_scenario_runner: ScenarioRunner[Scenario]) -> None:
-                assert typing_scenario_runner.scenario.__class__ is Scenario
+            def test_has_scenario_again(typing_scenario_runner: scenarios.ScenarioRunner[scenarios.Scenario]) -> None:
+                assert typing_scenario_runner.scenario.__class__ is scenarios.Scenario
         """
         )
 
@@ -67,21 +67,21 @@ class TestPlugin:
     def test_it_can_change_class_used_for_scenario_runner(self, pytester: pytest.Pytester) -> None:
         pytester.makepyfile(
             """
-            from pytest_typing_runner import Scenario, ScenarioRunner, protocols
+            from pytest_typing_runner import scenarios, protocols
             import dataclasses
             import pytest
 
 
-            def test_has_scenario(typing_scenario_runner: ScenarioRunner[Scenario]) -> None:
-                assert typing_scenario_runner.__class__ is ScenarioRunner
+            def test_has_scenario(typing_scenario_runner: scenarios.ScenarioRunner[scenarios.Scenario]) -> None:
+                assert typing_scenario_runner.__class__ is scenarios.ScenarioRunner
 
             class TestOne:
                 @dataclasses.dataclass(frozen=True, kw_only=True)
-                class MyScenarioRunner(ScenarioRunner[Scenario]):
+                class MyScenarioRunner(scenarios.ScenarioRunner[scenarios.Scenario]):
                     pass
 
                 @pytest.fixture()
-                def typing_scenario_runner_maker(self) -> protocols.ScenarioRunnerMaker[Scenario]:
+                def typing_scenario_runner_maker(self) -> protocols.ScenarioRunnerMaker[scenarios.Scenario]:
                     return self.MyScenarioRunner.create
 
                 def test_has_scenario(self, typing_scenario_runner: MyScenarioRunner) -> None:
@@ -89,7 +89,7 @@ class TestPlugin:
 
             class TestTwo:
                 @dataclasses.dataclass(frozen=True, kw_only=True)
-                class MyScenarioRunner2(ScenarioRunner[Scenario]):
+                class MyScenarioRunner2(scenarios.ScenarioRunner[scenarios.Scenario]):
                     pass
 
                 @pytest.fixture()
@@ -99,8 +99,8 @@ class TestPlugin:
                 def test_has_scenario(self, typing_scenario_runner: MyScenarioRunner2) -> None:
                     assert isinstance(typing_scenario_runner, self.MyScenarioRunner2)
 
-            def test_has_scenario_again(typing_scenario_runner: ScenarioRunner[Scenario]) -> None:
-                assert typing_scenario_runner.__class__ is ScenarioRunner
+            def test_has_scenario_again(typing_scenario_runner: scenarios.ScenarioRunner[scenarios.Scenario]) -> None:
+                assert typing_scenario_runner.__class__ is scenarios.ScenarioRunner
         """
         )
 
@@ -114,8 +114,7 @@ class TestPlugin:
         log.write_text("")
 
         pytester.makeconftest(f"""
-        from pytest_typing_runner import RunnerConfig, Scenario, ScenarioRunner
-        from pytest_typing_runner import protocols
+        from pytest_typing_runner import scenarios, protocols
         import dataclasses
         import pathlib
         import pytest
@@ -127,7 +126,7 @@ class TestPlugin:
             return count[None]
 
         @dataclasses.dataclass(frozen=True, kw_only=True)
-        class MyScenarioRunner(ScenarioRunner[Scenario]):
+        class MyScenarioRunner(scenarios.ScenarioRunner[scenarios.Scenario]):
             count: int = dataclasses.field(default_factory=next_count)
 
             def __post_init__(self) -> None:
@@ -143,12 +142,12 @@ class TestPlugin:
                     print("cleanup", self.count, file=fle)
 
         @pytest.fixture()
-        def typing_scenario_runner_maker() -> protocols.ScenarioRunnerMaker[Scenario]:
+        def typing_scenario_runner_maker() -> protocols.ScenarioRunnerMaker[scenarios.Scenario]:
             return MyScenarioRunner.create
         """)
 
         pytester.makepyfile(f"""
-        from pytest_typing_runner import Scenario, ScenarioRunner
+        from pytest_typing_runner import scenarios
         from conftest import MyScenarioRunner
         import pytest
 
@@ -205,7 +204,7 @@ class TestPlugin:
         self, pytester: pytest.Pytester, tmp_path: pathlib.Path
     ) -> None:
         pytester.makeconftest("""
-        from pytest_typing_runner import Scenario, protocols, ScenarioRuns, ScenarioRunner
+        from pytest_typing_runner import scenarios, protocols
         from collections.abc import Iterator
         import dataclasses
         import pathlib
@@ -213,7 +212,7 @@ class TestPlugin:
 
 
         @dataclasses.dataclass(frozen=True, kw_only=True)
-        class Runs(ScenarioRuns):
+        class Runs(scenarios.ScenarioRuns):
             _lines: list[str] = dataclasses.field(init=False, default_factory=list)
 
             @property
@@ -227,23 +226,21 @@ class TestPlugin:
                 self._lines.extend(lines)
 
         @pytest.fixture()
-        def typing_scenario_runs_maker() -> protocols.ScenarioRunsMaker[Scenario]:
+        def typing_scenario_runs_maker() -> protocols.ScenarioRunsMaker[scenarios.Scenario]:
             return Runs
         """)
 
         pytester.makepyfile("""
-        from pytest_typing_runner import ScenarioRunner, Scenario
+        from pytest_typing_runner import scenarios, protocols
         import pytest
 
-        Scenario = ScenarioRunner[Scenario]
 
-
-        def test_one(typing_scenario_runner: ScenarioRunner) -> None:
+        def test_one(typing_scenario_runner: protocols.ScenarioRunner[scenarios.Scenario]) -> None:
             typing_scenario_runner.runs.add("one", "two", "three")
             raise AssertionError("NO")
 
         class TestOne:
-            def test_two(self, typing_scenario_runner: ScenarioRunner) -> None:
+            def test_two(self, typing_scenario_runner: protocols.ScenarioRunner[scenarios.Scenario]) -> None:
                 typing_scenario_runner.runs.add("four", "five")
 
         class TestTwo:
@@ -251,11 +248,11 @@ class TestPlugin:
                 raise AssertionError("No")
 
             class TestThree:
-                def test_four(self, typing_scenario_runner: ScenarioRunner) -> None:
+                def test_four(self, typing_scenario_runner: protocols.ScenarioRunner[scenarios.Scenario]) -> None:
                     typing_scenario_runner.runs.add("six", "seven")
                     raise AssertionError("NO")
 
-        def test_five(typing_scenario_runner: Scenario) -> None:
+        def test_five(typing_scenario_runner: protocols.ScenarioRunner[scenarios.Scenario]) -> None:
             raise AssertionError("No")
         """)
 
@@ -274,7 +271,7 @@ class TestPlugin:
             if not report.passed:
                 for name, val in report.user_properties:
                     if name == "typing_runner":
-                        assert isinstance(val, ScenarioRunner)
+                        assert isinstance(val, scenarios.ScenarioRunner)
                         found = True
 
                 if not found:

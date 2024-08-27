@@ -15,10 +15,10 @@ and methods.
 
 The default implementation of this protocol is:
 
-.. autoclass:: pytest_typing_runner.Expects
+.. autoclass:: pytest_typing_runner.scenarios.Expects
     :members:
     :member-order: bysource
 
-.. autoclass:: pytest_typing_runner.Scenario
+.. autoclass:: pytest_typing_runner.scenarios.Scenario
     :members:
     :member-order: bysource
