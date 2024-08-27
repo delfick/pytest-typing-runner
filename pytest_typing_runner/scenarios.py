@@ -119,17 +119,38 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
     Holds the information for a single run of the type checker in the test.
 
     Implements :protocol:`pytest_typing_runner.protocols.ScenarioRun`
+
+    :param is_first: Whether this is the first run
+    :param is_followup:
+        Whether this is a followup run (so nothing has changed since last run)
+    :param checker:
+        The object that represents the result, runner and check logic from the run
+    :param expectations:
+        Represents the notices that were expected from the run
+    :param expectation_error:
+        Any error from matching the result to the expectations for that run
+    :param file_modifications:
+        A list of ``(path, action)`` for the file changes that setup the scenario.
     """
 
     is_first: bool
     is_followup: bool
-    scenario: protocols.T_Scenario
     checker: protocols.NoticeChecker[protocols.T_Scenario]
-    expectations: protocols.Expectations[protocols.T_Scenario]
     expectation_error: Exception | None
     file_modifications: Sequence[tuple[str, str]]
 
     def for_report(self) -> Iterator[str]:
+        """
+        Return a list of strings that can be displayed in a pytest report
+
+        * displays path/action from ``file_modifications``
+        * displays ``[followup run]`` if ``is_followup`` else displays the combination
+          of ``short_display()`` from ``checker.runner`` and the ``args`` and
+          ``check_paths`` on ``checker.runner.options``
+        * displays the ``exit_code`` from ``checker.result``
+        * displays each line in ``stdout`` and ``stderr`` from ``checker.result``
+        * displays the ``expectation_error`` if there was one.
+        """
         for path, action in self.file_modifications:
             yield f"* {action:10s}: {path}"
 
@@ -147,11 +168,17 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
 
         yield f"| exit_code={self.checker.result.exit_code}"
         for line in self.checker.result.stdout.split("\n"):
-            yield f"| stdout: {line}"
+            l = line.rstrip()
+            if l:
+                l = f" {l}"
+            yield f"| stdout:{l}"
         for line in self.checker.result.stderr.split("\n"):
-            yield f"| stderr: {line}"
+            l = line.rstrip()
+            if l:
+                l = f" {l}"
+            yield f"| stderr:{l}"
         if self.expectation_error:
-            yield f"!!! {self.expectation_error}"
+            yield f"!!! <{self.expectation_error.__class__.__name__}> {self.expectation_error}"
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -190,7 +217,6 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
         self,
         *,
         checker: protocols.NoticeChecker[protocols.T_Scenario],
-        expectations: protocols.Expectations[protocols.T_Scenario],
         expectation_error: Exception | None,
     ) -> protocols.ScenarioRun[protocols.T_Scenario]:
         """
@@ -200,11 +226,9 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
         self._file_modifications.clear()
 
         run = ScenarioRun(
-            scenario=self.scenario,
             is_first=not self.has_runs,
             is_followup=checker.runner.options.do_followup and len(self._runs) == 1,
             checker=checker,
-            expectations=expectations,
             expectation_error=expectation_error,
             file_modifications=file_modifications,
         )
@@ -312,18 +336,10 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         try:
             expectations.check()
         except Exception as err:
-            self.runs.add_run(
-                checker=checker,
-                expectations=expectations,
-                expectation_error=err,
-            )
+            self.runs.add_run(checker=checker, expectation_error=err)
             raise
         else:
-            run = self.runs.add_run(
-                checker=checker,
-                expectations=expectations,
-                expectation_error=None,
-            )
+            run = self.runs.add_run(checker=checker, expectation_error=None)
 
         if options.do_followup and run.is_first:
             repeat_expectations: protocols.ExpectationsSetup[protocols.T_Scenario] = (

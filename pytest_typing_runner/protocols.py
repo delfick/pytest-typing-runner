@@ -320,12 +320,6 @@ class ScenarioRun(Protocol[T_Scenario]):
         """
 
     @property
-    def scenario(self) -> T_Scenario:
-        """
-        The scenario that was run
-        """
-
-    @property
     def file_modifications(self) -> Sequence[tuple[str, str]]:
         """
         The file modifications that were done before this run
@@ -335,12 +329,6 @@ class ScenarioRun(Protocol[T_Scenario]):
     def checker(self) -> NoticeChecker[T_Scenario]:
         """
         The result from running the type checker
-        """
-
-    @property
-    def expectations(self) -> Expectations[T_Scenario]:
-        """
-        The expectations that were used on this run
         """
 
     @property
@@ -385,11 +373,7 @@ class ScenarioRuns(Protocol[T_Scenario]):
         """
 
     def add_run(
-        self,
-        *,
-        checker: NoticeChecker[T_Scenario],
-        expectations: Expectations[T_Scenario],
-        expectation_error: Exception | None,
+        self, *, checker: NoticeChecker[T_Scenario], expectation_error: Exception | None
     ) -> ScenarioRun[T_Scenario]:
         """
         Used to add a single run to the record
