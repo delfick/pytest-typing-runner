@@ -5,6 +5,7 @@
    api/changelog
    api/installation
    api/configuration
+   api/scenario
    api/protocols
    api/notices
    api/notice_changers

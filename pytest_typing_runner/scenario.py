@@ -15,7 +15,16 @@ from . import notices, protocols, runner
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class RunnerConfig:
     """
-    Default implementation of the protocols.RunnerConfig.
+    Holds the defaults received from pytest command line options
+
+    Implements of :protocol:`pytest_typing_runner.protocols.RunnerConfig`
+
+    :param same_process:
+        The default used for `same_process`` on the Scenario.
+    :typing_strategy_maker:
+        An object that can produce a :protocol:`pytest_typing_runner.protocols.StrategyMaker`
+        object for determining the default :protocol:`pytest_typing_runner.protocols.Strategy`
+        to use when creating the :protocol:`pytest_typing_runner.protocols.Scenario`
     """
 
     same_process: bool
@@ -24,6 +33,18 @@ class RunnerConfig:
 
 @dataclasses.dataclass
 class Expects:
+    """
+    Holds boolean expectations from running the type checker in the scenario
+
+    Implements of :protocol:`pytest_typing_runner.protocols.Expects`
+
+    :param failure: Whether the type checker is expected to fail
+    :param daemon_restarted:
+        Used when a type checker is used that depends on a daemon and
+        indicates whether the scenario believes the daemon will be restarted
+        in the next run of the type checker.
+    """
+
     failure: bool = False
     daemon_restarted: bool = False
 
@@ -31,7 +52,18 @@ class Expects:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Scenario:
     """
-    Default implementation of the protocols.Scenario
+    The heart of each pytest typing runner test. Everything is in terms of a specific implementation
+    of scenario. The idea is that when customising what the plugin does, this object is the only
+    one where apis can be added.
+
+    The other objects are generic to the specific implementation of Scenario.
+
+    Implements of :protocol:`pytest_typing_runner.protocols.Scenario`
+
+    :param root_dir: The directory to place all the files in for the scenario.
+    :param same_process: Whether to run the type checker in the same process or not
+    :param expects: A container of boolean expectations
+    :param check_paths: A list of strings representing the paths the type checker should check
     """
 
     root_dir: pathlib.Path
@@ -42,14 +74,18 @@ class Scenario:
 
     @classmethod
     def create(cls, config: protocols.RunnerConfig, root_dir: pathlib.Path) -> Self:
+        """
+        A handy helper that implements :protocol:`pytest_typing_runner.protocols.ScenarioMaker`
+        """
         return cls(root_dir=root_dir, same_process=config.same_process)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class RunCleaners:
     """
-    Object that holds cleanup functions to be run at the end
-    of the test
+    Object that holds cleanup functions to be run at the end of the test.
+
+    Implements of :protocol:`pytest_typing_runner.protocols.RunCleaners`
     """
 
     _cleaners: MutableMapping[str, protocols.RunCleaner] = dataclasses.field(
@@ -66,7 +102,9 @@ class RunCleaners:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ScenarioRun(Generic[protocols.T_Scenario]):
     """
-    Default implementation of the protocols.ScenarioRun
+    Holds the information for a single run of the type checker in the test.
+
+    Implements of :protocol:`pytest_typing_runner.protocols.ScenarioRun`
     """
 
     is_first: bool
@@ -105,7 +143,9 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ScenarioRuns(Generic[protocols.T_Scenario]):
     """
-    Default implementation of the protocols.ScenarioRuns.
+    A collection of scenario runs for a test.
+
+    Implements of :protocol:`pytest_typing_runner.protocols.ScenarioRuns`
     """
 
     scenario: protocols.T_Scenario
@@ -160,6 +200,12 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ScenarioRunner(Generic[protocols.T_Scenario]):
+    """
+    Holds logic for creating and using objects that hold onto the scenario.
+
+    Implements of :protocol:`pytest_typing_runner.protocols.ScenarioRuns`
+    """
+
     scenario: protocols.T_Scenario
     program_runner_maker: protocols.ProgramRunnerMaker[protocols.T_Scenario]
     runs: protocols.ScenarioRuns[protocols.T_Scenario]

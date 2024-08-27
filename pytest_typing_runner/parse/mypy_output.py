@@ -109,7 +109,7 @@ class MypyOutput:
             A :protocol:`pytest_typing_runner.protocols.ProgramNoticeChanger` that
             is used on every notice that is added
         :param into:
-            The :protocol:pytest_typing_runner.protocols.ProgramNotices` that the
+            The :protocol:`pytest_typing_runner.protocols.ProgramNotices` that the
             notices should be added to
         :param root_dir:
             The base directory that each path is added to to create the

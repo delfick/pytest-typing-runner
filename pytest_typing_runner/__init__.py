@@ -1,7 +1,7 @@
 from . import expectations, file_changer, notices, protocols, runner
 from .builder import ScenarioBuilder, ScenarioFile
 from .errors import PyTestTypingRunnerException
-from .scenario import RunnerConfig, Scenario, ScenarioRunner, ScenarioRuns
+from .scenario import Expects, RunnerConfig, Scenario, ScenarioRunner, ScenarioRuns
 
 __all__ = [
     "runner",
@@ -9,6 +9,7 @@ __all__ = [
     "file_changer",
     "expectations",
     "notices",
+    "Expects",
     "Scenario",
     "RunnerConfig",
     "ScenarioFile",
