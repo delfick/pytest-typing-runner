@@ -141,7 +141,7 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
 
     def for_report(self) -> Iterator[str]:
         """
-        Return a list of strings that can be displayed in a pytest report
+        Yields lines that can be displayed in a pytest report
 
         * displays path/action from ``file_modifications``
         * displays ``[followup run]`` if ``is_followup`` else displays the combination
@@ -187,6 +187,8 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
     A collection of scenario runs for a test.
 
     Implements :protocol:`pytest_typing_runner.protocols.ScenarioRuns`
+
+    :param scenario: The scenario runs are being collected for
     """
 
     scenario: protocols.T_Scenario
@@ -198,19 +200,25 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
     )
 
     def for_report(self) -> Iterator[str]:
-        if not self._runs:
-            return
-        else:
-            for i, run in enumerate(self._runs):
-                yield f":: Run {i+1}"
-                for line in run.for_report():
-                    yield f"   | {line}"
+        """
+        Yields lines for a pytest report indented and with a heading for each run.
+        """
+        for i, run in enumerate(self._runs):
+            yield f":: Run {i+1}"
+            for line in run.for_report():
+                yield f"   | {line}"
 
     @property
     def has_runs(self) -> bool:
+        """
+        Return whether this holds any runs
+        """
         return bool(self._runs)
 
     def add_file_modification(self, path: str, action: str) -> None:
+        """
+        Record a file modification for the current run
+        """
         self._file_modifications.append((path, action))
 
     def add_run(
@@ -221,6 +229,14 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
     ) -> protocols.ScenarioRun[protocols.T_Scenario]:
         """
         Used to add a single run to the record
+
+        Will take the ``file_modifications`` recorded on the collection and create
+        the ``ScenarioRun`` with those modifications before clearing it on the
+        collection.
+
+        :param checker: The result of running the type checker
+        :param expectation_error:
+            The error from checking expectations if there was one
         """
         file_modifications = tuple(self._file_modifications)
         self._file_modifications.clear()
@@ -355,7 +371,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
             scenario_runner=self,
             make_program_runner=self.program_runner_maker,
             cwd=self.scenario.root_dir,
-            check_paths=self.scenario.check_paths,
+            check_paths=list(self.scenario.check_paths),
             args=list(self.program_runner_maker.default_args),
             do_followup=self.program_runner_maker.do_followups,
             environment_overrides={},

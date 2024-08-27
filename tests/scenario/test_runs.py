@@ -253,3 +253,199 @@ class TestScenarioRun:
                 | stderr: nine
                 """).strip()
             )
+
+
+class TestScenarioRuns:
+    @pytest.fixture
+    def runner(self, tmp_path: pathlib.Path) -> protocols.ScenarioRunner[protocols.Scenario]:
+        return scenarios.ScenarioRunner.create(
+            config=stubs.StubRunnerConfig(),
+            root_dir=tmp_path,
+            scenario_maker=scenarios.Scenario.create,
+            scenario_runs_maker=scenarios.ScenarioRuns,
+        )
+
+    def test_it_has_a_scenario(self, runner: protocols.ScenarioRunner[protocols.Scenario]) -> None:
+        options = runner.determine_options()
+        runs = scenarios.ScenarioRuns(scenario=options.scenario_runner.scenario)
+        assert runs.scenario is options.scenario_runner.scenario
+
+    def test_it_can_be_given_runs(
+        self, runner: protocols.ScenarioRunner[protocols.Scenario]
+    ) -> None:
+        options = runner.determine_options()
+        runs = scenarios.ScenarioRuns(scenario=options.scenario_runner.scenario)
+        assert not runs.has_runs
+
+        assert "\n".join(runs.for_report()) == ""
+
+        options = runner.determine_options()
+        notice_checker = options.make_program_runner(options=options).run()
+        runs.add_run(checker=notice_checker, expectation_error=None)
+        assert runs.has_runs
+
+        got = "\n".join(runs.for_report())
+        assert (
+            got
+            == textwrap.dedent("""
+                :: Run 1
+                   | > stubrun .
+                   | | exit_code=0
+                   | | stdout:
+                   | | stderr:
+                """).strip()
+        )
+
+        options = runner.determine_options()
+        notice_checker = options.make_program_runner(options=options).run()
+        runs.add_run(checker=notice_checker, expectation_error=None)
+        assert runs.has_runs
+
+        got = "\n".join(runs.for_report())
+        assert (
+            got
+            == textwrap.dedent("""
+               :: Run 1
+                  | > stubrun .
+                  | | exit_code=0
+                  | | stdout:
+                  | | stderr:
+               :: Run 2
+                  | > [followup run]
+                  | | exit_code=0
+                  | | stdout:
+                  | | stderr:
+                """).strip()
+        )
+
+        options = runner.determine_options()
+        options.args.append("one")
+        options.check_paths.append("two")
+        notice_checker = stubs.StubNoticeChecker(
+            runner=options.make_program_runner(options=options),
+            result=stubs.StubRunResult(
+                exit_code=2,
+                stdout="one\ntwo  \nthree four\nfive::",
+                stderr="six\nseven eight\nnine  ",
+            ),
+        )
+
+        runs.add_run(checker=notice_checker, expectation_error=ValueError("nope"))
+        assert runs.has_runs
+
+        got = "\n".join(runs.for_report())
+        assert (
+            got
+            == textwrap.dedent("""
+            :: Run 1
+               | > stubrun .
+               | | exit_code=0
+               | | stdout:
+               | | stderr:
+            :: Run 2
+               | > [followup run]
+               | | exit_code=0
+               | | stdout:
+               | | stderr:
+            :: Run 3
+               | > stubrun one . two
+               | | exit_code=2
+               | | stdout: one
+               | | stdout: two
+               | | stdout: three four
+               | | stdout: five::
+               | | stderr: six
+               | | stderr: seven eight
+               | | stderr: nine
+               | !!! <ValueError> nope
+                """).strip()
+        )
+
+    def test_it_prepare_file_modifications(
+        self, runner: protocols.ScenarioRunner[protocols.Scenario]
+    ) -> None:
+        options = runner.determine_options()
+        runs = scenarios.ScenarioRuns(scenario=options.scenario_runner.scenario)
+        assert not runs.has_runs
+
+        assert "\n".join(runs.for_report()) == ""
+
+        options = runner.determine_options()
+        runs.add_file_modification("some/path", "create")
+        runs.add_file_modification("some/other/path", "change")
+        notice_checker = options.make_program_runner(options=options).run()
+        runs.add_run(checker=notice_checker, expectation_error=None)
+        assert runs.has_runs
+
+        got = "\n".join(runs.for_report())
+        assert (
+            got
+            == textwrap.dedent("""
+                :: Run 1
+                   | * create    : some/path
+                   | * change    : some/other/path
+                   | > stubrun .
+                   | | exit_code=0
+                   | | stdout:
+                   | | stderr:
+                """).strip()
+        )
+
+        options = runner.determine_options()
+        notice_checker = options.make_program_runner(options=options).run()
+        runs.add_run(checker=notice_checker, expectation_error=None)
+        assert runs.has_runs
+
+        got = "\n".join(runs.for_report())
+        assert (
+            got
+            == textwrap.dedent("""
+               :: Run 1
+                  | * create    : some/path
+                  | * change    : some/other/path
+                  | > stubrun .
+                  | | exit_code=0
+                  | | stdout:
+                  | | stderr:
+               :: Run 2
+                  | > [followup run]
+                  | | exit_code=0
+                  | | stdout:
+                  | | stderr:
+                """).strip()
+        )
+
+        options = runner.determine_options()
+        options.args.append("one")
+        notice_checker = options.make_program_runner(options=options).run()
+
+        runs.add_file_modification("some/path", "remove")
+        runs.add_file_modification("other/blah", "change")
+        runs.add_run(checker=notice_checker, expectation_error=None)
+        assert runs.has_runs
+
+        got = "\n".join(runs.for_report())
+        assert (
+            got
+            == textwrap.dedent("""
+               :: Run 1
+                  | * create    : some/path
+                  | * change    : some/other/path
+                  | > stubrun .
+                  | | exit_code=0
+                  | | stdout:
+                  | | stderr:
+               :: Run 2
+                  | > [followup run]
+                  | | exit_code=0
+                  | | stdout:
+                  | | stderr:
+               :: Run 3
+                  | * remove    : some/path
+                  | * change    : other/blah
+                  | > stubrun one .
+                  | | exit_code=0
+                  | | stdout:
+                  | | stderr:
+                """).strip()
+        )
