@@ -63,14 +63,12 @@ class Scenario:
     :param root_dir: The directory to place all the files in for the scenario.
     :param same_process: Whether to run the type checker in the same process or not
     :param expects: A container of boolean expectations
-    :param check_paths: A list of strings representing the paths the type checker should check
     """
 
     root_dir: pathlib.Path
     same_process: bool
 
     expects: Expects = dataclasses.field(init=False, default_factory=Expects)
-    check_paths: list[str] = dataclasses.field(default_factory=lambda: ["."])
 
     @classmethod
     def create(cls, config: protocols.RunnerConfig, root_dir: pathlib.Path) -> Self:
@@ -258,6 +256,14 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
     Holds logic for creating and using objects that hold onto the scenario.
 
     Implements :protocol:`pytest_typing_runner.protocols.ScenarioRuns`
+
+    :param scenario: The scenario being controlled
+    :param program_runner_maker: Used to make the program runner
+    :param runs: Used to hold a record of each run of the type checker
+    :param cleaners:
+        A collection of cleanup functions that are used in the pytest fixture
+        that provides an instance of the ``ScenarioRunner`` to perform any
+        cleanup at the end of the run
     """
 
     scenario: protocols.T_Scenario
@@ -274,6 +280,14 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
         scenario_runs_maker: protocols.ScenarioRunsMaker[protocols.T_Scenario],
     ) -> Self:
+        """
+        Helpful classmethod that implements :protocol:`pytest_typing_runner.protocols.ScenarioRunnerMaker`
+
+        :param config: The pytest typing runner options from pytest command line
+        :param root_dir: The directory files for the scenario should be placed
+        :param scenario_maker: Used to create the scenario itself
+        :param scenario_runs_maker: Used to create the ``runs`` container
+        """
         scenario = scenario_maker(config=config, root_dir=root_dir)
         return cls(
             scenario=scenario,
@@ -297,11 +311,28 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
     def add_to_pytest_report(self, name: str, sections: list[tuple[str, str]]) -> None:
         """
         Default implementation adds a section with the provided name if there were runs to report
+
+        :param name: The name of the report
+        :param sections: The pytest report sections to add to
         """
         if self.runs.has_runs:
             sections.append((name, "\n".join(self.runs.for_report())))
 
     def file_modification(self, path: str, content: str | None) -> None:
+        """
+        Change a file in ``root_dir`` and record the action.
+
+        All changes to the files in the scenario should be done through this
+        function so that the pytest report is complete.
+
+        There are :ref:`helpers for changing files <file_changer>` that can be
+        used to perform high level changes with this hook.
+
+        :param path: The string path relative to ``root_dir`` to change
+        :param content:
+            Either a string to replace the whole file, or ``None`` if the file
+            should be deleted.
+        """
         location = self.scenario.root_dir / path
         if not location.is_relative_to(self.scenario.root_dir):
             raise ValueError("Tried to modify a file outside of the test root")
@@ -330,7 +361,15 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         self, options: protocols.RunOptions[protocols.T_Scenario]
     ) -> protocols.NoticeChecker[protocols.T_Scenario]:
         """
-        Default implementation returns the result of running the runner on options with those options
+        Used to run the type checker.
+
+        By default it uses ``make_program_runner`` on the options to create
+        a program runner and the ``run`` method is called, passing on the result
+
+        :param options: The run options
+        :returns:
+            A :protocol:`pytest_typing_runner.protocols.NoticeChecker` object
+            representing what was run, the result, and how to check it.
         """
         return options.make_program_runner(options=options).run()
 
@@ -340,6 +379,33 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         *,
         _options: protocols.RunOptions[protocols.T_Scenario] | None = None,
     ) -> None:
+        """
+        Used to run the type checker followed by checking and recording the result.
+
+        The ``setup_expectations`` passed in should perform any extra setup before
+        creating and running the type checker.
+
+        The result of ``setup_expectations`` is used after the type checker has
+        run to determine what was expected from that run.
+
+        This is used to check the run before recording the result on ``self.runs``.
+
+        .. note:: Running the type checker is done by calling the implementation
+            of ``execute_static_checking`` on this scenario runner instance.
+            And the run options is found by calling ``determine_options`` on
+            this instance.
+
+        If ``options.do_followup`` is ``True`` and it's the first run for this
+        scenario, and there was no error when checking the result, then
+        ``execute_static_checking`` is called again with the same
+        run options and checked against the same expectations. The idea is that
+        running the type checker again without any changes should produce the
+        same result.
+
+        :param setup_expectations:
+            Used to do setup before running the type checker and how to determine
+            what result is expected from the type checker
+        """
         if _options is not None:
             options = _options
         else:
@@ -365,13 +431,13 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
 
     def determine_options(self) -> runner.RunOptions[protocols.T_Scenario]:
         """
-        Default implementation uses the plugin config to determine the bare essential options
+        Used by ``run_and_check`` to determine run options.
         """
         return runner.RunOptions(
             scenario_runner=self,
             make_program_runner=self.program_runner_maker,
             cwd=self.scenario.root_dir,
-            check_paths=list(self.scenario.check_paths),
+            check_paths=["."],
             args=list(self.program_runner_maker.default_args),
             do_followup=self.program_runner_maker.do_followups,
             environment_overrides={},
@@ -385,11 +451,15 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         /,
     ) -> protocols.ProgramNotice:
         """
-        No extra normalisation by default
+        This is a hook that is available to be used by parsers of runner
+        output to do any required normalisation of type checker output.
         """
         return notice
 
     def generate_program_notices(self) -> protocols.ProgramNotices:
+        """
+        Returns a default implementation of :protocol:`pytest_typing_runner.ProgramNotices`
+        """
         return notices.ProgramNotices()
 
 

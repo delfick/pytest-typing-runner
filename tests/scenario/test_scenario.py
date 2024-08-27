@@ -13,7 +13,6 @@ class TestScenario:
         assert scenario.same_process is False
         assert not scenario.expects.failure
         assert not scenario.expects.daemon_restarted
-        assert scenario.check_paths == ["."]
 
     @pytest.mark.parametrize("same_process", [False, True])
     def test_it_has_a_create_classmethod(self, same_process: bool, tmp_path: pathlib.Path) -> None:
@@ -28,4 +27,3 @@ class TestScenario:
         # Rest is defaults
         assert not scenario.expects.failure
         assert not scenario.expects.daemon_restarted
-        assert scenario.check_paths == ["."]

@@ -776,12 +776,6 @@ class Scenario(Protocol):
         The root directory for all files in the scenario
         """
 
-    @property
-    def check_paths(self) -> MutableSequence[str]:
-        """
-        The files the type checker should specifically taret
-        """
-
 
 class ScenarioRunner(Protocol[T_Scenario]):
     """
