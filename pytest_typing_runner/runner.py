@@ -19,7 +19,20 @@ from . import expectations, parse, protocols
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class RunOptions(Generic[protocols.T_Scenario]):
     """
-    A concrete implementation of protocols.RunOptions
+    Holds options for a single run of a type checker.
+
+    Implements :protocol:`pytest_typing_runner.protocols.RunOptions`
+
+    :param scenario_runner: The Scenario runner for this test
+    :param make_program_runner: Used to create the program runner for the run
+    :param cwd: The working directory to run the program runner from
+    :param args: The arguments to use when executing the type checker
+    :param check_paths: The locations to make the type checker check
+    :param do_followup: Whether to do a follow up run or not
+    :param environment_overrides:
+        Any additions, changes or deletions to the environment variables for
+        running the type checker
+    :param cleaners: Used to register any cleanup for the end of the test
     """
 
     scenario_runner: protocols.ScenarioRunner[protocols.T_Scenario]
@@ -48,6 +61,15 @@ class RunOptions(Generic[protocols.T_Scenario]):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MypyChecker(Generic[protocols.T_Scenario]):
+    """
+    Used to check output from mypy
+
+    Implements :protocol:`pytest_typing_runner.protocols.NoticeChecker`
+
+    :param result: The result from running the type checker
+    :param runner: The program runner that was used
+    """
+
     result: expectations.RunResult
     runner: protocols.ProgramRunner[protocols.T_Scenario]
 
@@ -66,6 +88,12 @@ class MypyChecker(Generic[protocols.T_Scenario]):
         )
 
     def check(self, expected_notices: protocols.ProgramNotices, /) -> None:
+        """
+        Check that the result matches these expected notices
+
+        Will ignore any lines that start with ":debug:" and also ignore
+        the last line that explains if it found errors or not.
+        """
         lines: list[str] = [
             line
             for line in self.result.stdout.strip().split("\n")
@@ -82,21 +110,33 @@ class MypyChecker(Generic[protocols.T_Scenario]):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ExternalMypyRunner(Generic[protocols.T_Scenario]):
+    """
+    Used to run mypy in a subprocess.
+
+    Implements :protocol:`pytest_typing_runner.protocols.ProgramRunner`
+    """
+
     mypy_name: ClassVar[str] = "mypy"
     options: protocols.RunOptions[protocols.T_Scenario]
 
     @property
     def command(self) -> Sequence[str]:
+        """
+        Return the command as "python -m <mypy_name>"
+        """
         return (sys.executable, "-m", self.mypy_name)
 
     def short_display(self) -> str:
+        """
+        Return the parts of the command before adding args and check_paths
+        """
         return " ".join(self.command)
 
     def run(
         self, *, checker_kls: type[MypyChecker[protocols.T_Scenario]] = MypyChecker
     ) -> protocols.NoticeChecker[protocols.T_Scenario]:
         """
-        Run mypy as an external process
+        Run mypy as an external process.
         """
         env = dict(os.environ)
         for k, v in self.options.environment_overrides.items():
@@ -124,9 +164,18 @@ class ExternalMypyRunner(Generic[protocols.T_Scenario]):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
+    """
+    Used to run mypy programmatically in the same process
+
+    Implements :protocol:`pytest_typing_runner.protocols.ProgramRunner`
+    """
+
     options: protocols.RunOptions[protocols.T_Scenario]
 
     def short_display(self) -> str:
+        """
+        Display a string saying this was run in process
+        """
         return "inprocess::mypy"
 
     def run(self) -> protocols.NoticeChecker[protocols.T_Scenario]:
@@ -232,10 +281,26 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class DaemonMypyChecker(MypyChecker[protocols.T_Scenario]):
+    """
+    Used to check the output from dmypy.
+
+    Implements :protocol:`pytest_typing_runner.protocols.NoticeChecker`
+    """
+
     def check(
         self,
         expected_notices: protocols.ProgramNotices,
     ) -> None:
+        """
+        Check that the result matches these expected notices
+
+        Will ignore any lines that start with ":debug:" and also ignore
+        the last line that explains if it found errors or not.
+
+        Will also look for messages that indicate that the daemon restarted
+        and check the existence or absence of these messages against
+        ``scenario.expects.daemon_restarted``.
+        """
         lines: list[str] = [
             line
             for line in self.result.stdout.strip().split("\n")
@@ -276,15 +341,30 @@ class DaemonMypyChecker(MypyChecker[protocols.T_Scenario]):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
+    """
+    Used to run dmypy in a subprocess.
+
+    Implements :protocol:`pytest_typing_runner.protocols.ProgramRunner`
+
+    This is a variation of :class:`ExternalMypyRunner` that uses
+    ``python -m mypy.dmypy`` instead of ``python -m mypy``
+    """
+
     mypy_name: ClassVar[str] = "mypy.dmypy"
 
     def __post_init__(self) -> None:
+        """
+        Make sure the scenario doesn't expect this to run in the same process
+        """
         if self.options.scenario_runner.scenario.same_process:
             raise ValueError(
                 "The DAEMON strategy cannot also be in run in the same pytest process"
             )
 
     def short_display(self) -> str:
+        """
+        Return the parts of the command before adding args and check_paths
+        """
         return " ".join(self.command)
 
     def run(
@@ -292,6 +372,9 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
     ) -> protocols.NoticeChecker[protocols.T_Scenario]:
         """
         Run dmypy as an external process
+
+        Also registers a cleaner that ensures that dmypy has been stopped when
+        the rest of the test has finished.
         """
         self.options.cleaners.add(
             f"program_runner::dmypy::{self.options.cwd}",
@@ -313,6 +396,10 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
         )
 
     def _cleanup(self, *, cwd: pathlib.Path) -> None:
+        """
+        If dmypy is running in the cwd that was used then make sure to make it
+        stop.
+        """
         completed = subprocess.run([*self.command, "status"], capture_output=True, cwd=cwd)
         if completed.returncode == 0:
             completed = subprocess.run([*self.command, "kill"], capture_output=True, cwd=cwd)

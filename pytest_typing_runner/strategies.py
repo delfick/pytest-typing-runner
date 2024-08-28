@@ -19,12 +19,24 @@ class NoStrategiesRegistered(errors.PyTestTypingRunnerException):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Strategy:
+    """
+    Represents how to get to the program runner for the test
+
+    Implements :protocol:`pytest_typing_runner.protocols.Strategy`
+    """
+
     program_short: str
     program_runner_chooser: protocols.ProgramRunnerChooser
 
 
 @dataclasses.dataclass
 class StrategyRegistry:
+    """
+    Discovers and holds onto default strategies that are exposed to pytest command line options
+
+    Implements :protocol:`pytest_typing_runner.protocols.StrategyRegistry`
+    """
+
     registry: MutableMapping[str, tuple[str, protocols.StrategyMaker]] = dataclasses.field(
         default_factory=dict
     )
@@ -56,6 +68,14 @@ class StrategyRegistry:
     ) -> None:
         """
         Register a maker to a specific name
+
+        :param name:
+            The name of the maker, existing makers with this name will
+            be overriden
+        :param description:
+            The description for the maker as shown in pytest help output
+        :param maker: The function that makes the ProgramRunnerChooser
+        :param make_default: Whether this should be the default maker
         """
         if make_default:
             self.set_default(name=name)
@@ -100,12 +120,26 @@ class StrategyRegistry:
 
     @dataclasses.dataclass(frozen=True, kw_only=True)
     class CLIOptions:
+        """
+        Options returned from the function that creates information required
+        to make a cli option from this registry
+
+        :param str_to_maker: convert string from the cli into a maker
+        :param help_text: The help to show for this option
+        :param default: The name of the default strategy
+        :param choices: The available makers to the cli option
+        """
+
         str_to_maker: Callable[[str], protocols.StrategyMaker]
         help_text: str
         default: str
         choices: list[str]
 
     def cli_option_info(self) -> CLIOptions:
+        """
+        Return information required to make the command line option
+        """
+
         def str_to_maker(name: str, /) -> protocols.StrategyMaker:
             got = self.get_strategy(name=name)
             if got is None:
@@ -135,6 +169,18 @@ class StrategyRegistry:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MypyChoice(Generic[protocols.T_Scenario]):
+    """
+    Used to create a Mypy ProgramRunner
+
+    Implements :protocol:`pytest_typing_runner.protocols.ProgramRunnerMaker`
+
+    :param default_args: The default arguments to use with this program runner
+    :param do_followups: Whether to do followups with this runner
+    :param same_process:
+        Whether to return a runner that executes mypy in the same
+        process or not
+    """
+
     default_args: Sequence[str]
     do_followups: bool
     same_process: bool
@@ -143,6 +189,14 @@ class MypyChoice(Generic[protocols.T_Scenario]):
     def __call__(
         self, *, options: protocols.RunOptions[protocols.T_Scenario]
     ) -> protocols.ProgramRunner[protocols.T_Scenario]:
+        """
+        Create the program runner to use
+
+        If ``same_process`` we choose
+        :class:`pytest_typing_runner.runner.SameProcessMypyRunner`
+        otherwise we choose
+        :class:`pytest_typing_runner.runner.ExternalMypyRunner`
+        """
         if self.same_process:
             return runner.SameProcessMypyRunner(options=options)
         else:
@@ -151,11 +205,26 @@ class MypyChoice(Generic[protocols.T_Scenario]):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class DaemonMypyChoice(MypyChoice[protocols.T_Scenario]):
+    """
+    Used to create a Daemon Mypy ProgramRunner
+
+    Implements :protocol:`pytest_typing_runner.protocols.ProgramRunnerMaker`
+
+    :param default_args: The default arguments to use with this program runner
+    :param do_followups: Whether to do followups with this runner
+    """
+
     is_daemon: bool = dataclasses.field(init=False, default=True)
 
     def __call__(
         self, *, options: protocols.RunOptions[protocols.T_Scenario]
     ) -> protocols.ProgramRunner[protocols.T_Scenario]:
+        """
+        Returns an instance of
+        :class:`pytest_typing_runner.runner.ExternalDaemonMypyRunner`
+        """
+        if self.same_process:
+            raise ValueError("The mypy daemon cannot be run in the same process")
         return runner.ExternalDaemonMypyRunner(options=options)
 
 
