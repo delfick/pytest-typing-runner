@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 import functools
 import pathlib
@@ -353,14 +355,24 @@ class TestScenarioFile:
 
 
 class TestUsingBuilder:
-    class Builder(builders.ScenarioBuilder[scenarios.Scenario, builders.ScenarioFile]):
+    @dataclasses.dataclass(frozen=True, kw_only=True)
+    class Scenario(scenarios.Scenario):
+        called: list[object] = dataclasses.field(default_factory=list)
+
+    @pytest.fixture()
+    def typing_scenario_maker(self) -> protocols.ScenarioMaker[Scenario]:
+        return self.Scenario.create
+
+    class Builder(builders.ScenarioBuilder[Scenario, builders.ScenarioFile]):
         pass
 
     @dataclasses.dataclass(frozen=True, kw_only=True)
-    class ProgramRunner(stubs.StubRunner[protocols.T_Scenario]):
-        options: protocols.RunOptions[protocols.T_Scenario]
+    class ProgramRunner(stubs.StubRunner[Scenario]):
+        options: protocols.RunOptions[TestUsingBuilder.Scenario]
 
-        def run(self) -> protocols.NoticeChecker[protocols.T_Scenario]:
+        def run(self) -> protocols.NoticeChecker[TestUsingBuilder.Scenario]:
+            self.options.scenario_runner.scenario.called.append("run")
+
             success_out = textwrap.dedent("""
             main.py:3: note: Revealed type is "builtins.int"
             Success: no issues found in 2 source files
@@ -375,13 +387,13 @@ class TestUsingBuilder:
             first_content = textwrap.dedent("""
             a: int = 1
             reveal_type(a)
-            # ^ REVEAL ^ builtins.int
+            # ^ REVEAL[a] ^ builtins.int
             """).strip()
 
             second_content = textwrap.dedent("""
             a: int = 1
             reveal_type(a)
-            # ^ REVEAL ^ builtins.int
+            # ^ REVEAL[a] ^ builtins.int
 
 
             a = "asdf"
@@ -402,17 +414,17 @@ class TestUsingBuilder:
             return "stubrunner"
 
     @dataclasses.dataclass(frozen=True, kw_only=True)
-    class ScenarioRunner(scenarios.ScenarioRunner[scenarios.Scenario]):
-        def determine_options(self) -> protocols.RunOptions[scenarios.Scenario]:
+    class ScenarioRunner(scenarios.ScenarioRunner[Scenario]):
+        def determine_options(self) -> protocols.RunOptions[TestUsingBuilder.Scenario]:
             options = super().determine_options()
             return options.clone(
-                make_program_runner=stubs.StubProgramRunnerMaker[scenarios.Scenario](
+                make_program_runner=stubs.StubProgramRunnerMaker[TestUsingBuilder.Scenario](
                     runner_kls=TestUsingBuilder.ProgramRunner
                 )
             )
 
     @pytest.fixture
-    def typing_scenario_runner_maker(self) -> protocols.ScenarioRunnerMaker[scenarios.Scenario]:
+    def typing_scenario_runner_maker(self) -> protocols.ScenarioRunnerMaker[Scenario]:
         return self.ScenarioRunner.create
 
     @pytest.fixture
@@ -426,15 +438,19 @@ class TestUsingBuilder:
             ),
         )
 
-    def test_things(self, builder: Builder) -> None:
+    def test_works_with_decorator(self, builder: Builder) -> None:
+        assert builder.scenario_runner.scenario.called == []
+
         @builder.run_and_check_after
         def _() -> None:
             builder.on("main.py").set(
                 """
                 a: int = 1
-                # ^ REVEAL ^ builtins.int
+                # ^ REVEAL[a] ^ builtins.int
                 """
             )
+
+        assert builder.scenario_runner.scenario.called == ["run"]
 
         @builder.run_and_check_after
         def _() -> None:
@@ -445,3 +461,83 @@ class TestUsingBuilder:
                 # ^ ERROR(assignment) ^ Incompatible types in assignment (expression has type "str", variable has type "int")
                 """
             )
+
+        assert builder.scenario_runner.scenario.called == ["run", "run"]
+
+        expected = textwrap.dedent("""
+        > main.py
+          | ✘ 3:
+          | ✓ severity=note:: Revealed type is "builtins.int"
+          | ✘ !! GOT  !! <NONE>
+          |   !! WANT !! severity=note:: Revealed type is "other"
+          | ✓ 7: severity=error[assignment]:: Incompatible types in assignment (expression has type "str", variable has type "int")
+        """).strip()
+
+        with pytest.raises(AssertionError) as e:
+
+            @builder.run_and_check_after
+            def _() -> None:
+                builder.on("main.py").expect(
+                    notices.AddRevealedTypes(name="a", revealed=["other"])
+                )
+
+        assert str(e.value).strip() == expected
+        assert builder.scenario_runner.scenario.called == ["run", "run", "run"]
+
+    def test_works_without_decorator(self, builder: Builder) -> None:
+        builder.on("main.py").set(
+            """
+            a: int = 1
+            # ^ REVEAL[a] ^ builtins.int
+            """
+        )
+        assert builder.scenario_runner.scenario.called == []
+        builder.run_and_check()
+        assert builder.scenario_runner.scenario.called == ["run"]
+
+        builder.expect_failure()
+        builder.on("main.py").append(
+            """
+            a = "asdf"
+            # ^ ERROR(assignment) ^ Incompatible types in assignment (expression has type "str", variable has type "int")
+            """
+        )
+        assert builder.scenario_runner.scenario.called == ["run"]
+        builder.run_and_check()
+        assert builder.scenario_runner.scenario.called == ["run", "run"]
+
+        builder.on("main.py").expect(notices.AddRevealedTypes(name="a", revealed=["nope"]))
+        expected = textwrap.dedent("""
+        > main.py
+          | ✘ 3:
+          | ✓ severity=note:: Revealed type is "builtins.int"
+          | ✘ !! GOT  !! <NONE>
+          |   !! WANT !! severity=note:: Revealed type is "nope"
+          | ✓ 7: severity=error[assignment]:: Incompatible types in assignment (expression has type "str", variable has type "int")
+        """).strip()
+
+        with pytest.raises(AssertionError) as e:
+            builder.run_and_check()
+
+        assert str(e.value).strip() == expected
+        assert builder.scenario_runner.scenario.called == ["run", "run", "run"]
+
+    def test_it_can_change_failure_expectations(
+        self, builder: Builder, typing_scenario_runner: ScenarioRunner
+    ) -> None:
+        assert not typing_scenario_runner.scenario.expects.failure
+        builder.expect_failure()
+        assert typing_scenario_runner.scenario.expects.failure
+
+        builder.expect_success()
+        assert not typing_scenario_runner.scenario.expects.failure
+
+    def test_it_change_daemon_restarting_expectation(
+        self, builder: Builder, typing_scenario_runner: ScenarioRunner
+    ) -> None:
+        assert not typing_scenario_runner.scenario.expects.daemon_restarted
+        builder.daemon_should_restart()
+        assert typing_scenario_runner.scenario.expects.daemon_restarted
+
+        builder.daemon_should_not_restart()
+        assert not typing_scenario_runner.scenario.expects.daemon_restarted
