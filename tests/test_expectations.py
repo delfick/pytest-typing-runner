@@ -1,5 +1,6 @@
 import dataclasses
 import pathlib
+import textwrap
 
 import pytest
 from pytest_typing_runner_test_driver import matchers, stubs
@@ -216,3 +217,197 @@ class TestNormaliseNotices:
             matchers.MatchNote(location=l2, line_number=5, msg="g"),
             matchers.MatchNote(location=l2, line_number=5, msg="f"),
         ]
+
+
+class TestCompareNotices:
+    def test_it_says_two_empty_diff_is_fine(self) -> None:
+        expectations.compare_notices(notices.DiffNotices(by_file={}))
+
+    def test_it_makes_no_error_if_no_difference(self) -> None:
+        def note(path: str, line_number: int, msg: str) -> protocols.ProgramNotice:
+            return notices.ProgramNotice(
+                location=pathlib.Path(path),
+                line_number=line_number,
+                severity=notices.NoteSeverity(),
+                msg=msg,
+                col=None,
+            )
+
+        def error(
+            path: str, line_number: int, error_type: str, msg: str
+        ) -> protocols.ProgramNotice:
+            return notices.ProgramNotice(
+                location=pathlib.Path(path),
+                line_number=line_number,
+                severity=notices.ErrorSeverity(error_type),
+                msg=msg,
+                col=None,
+            )
+
+        diff = notices.DiffNotices(
+            by_file={
+                (path := "one"): notices.DiffFileNotices(
+                    by_line_number={
+                        (line_number := 1): (
+                            [
+                                note(path, line_number, "one"),
+                            ],
+                            [
+                                note(path, line_number, "one"),
+                            ],
+                        )
+                    },
+                ),
+                (path := "two"): notices.DiffFileNotices(
+                    by_line_number={
+                        (line_number := 10): (
+                            [
+                                error(path, line_number, "arg-type", "two"),
+                            ],
+                            [
+                                error(path, line_number, "arg-type", "two"),
+                            ],
+                        )
+                    },
+                ),
+            }
+        )
+
+        expectations.compare_notices(diff)
+
+    def test_it_shows_what_is_same_and_not_same_when_is_different(self) -> None:
+        def note(path: str, line_number: int, msg: str) -> protocols.ProgramNotice:
+            return notices.ProgramNotice(
+                location=pathlib.Path(path),
+                line_number=line_number,
+                severity=notices.NoteSeverity(),
+                msg=msg,
+                col=None,
+            )
+
+        def error(
+            path: str, line_number: int, error_type: str, msg: str
+        ) -> protocols.ProgramNotice:
+            return notices.ProgramNotice(
+                location=pathlib.Path(path),
+                line_number=line_number,
+                severity=notices.ErrorSeverity(error_type),
+                msg=msg,
+                col=None,
+            )
+
+        diff = notices.DiffNotices(
+            by_file={
+                (path := "one"): notices.DiffFileNotices(
+                    by_line_number={
+                        (line_number := 1): (
+                            [
+                                note(path, line_number, "one\ntwo\nthree"),
+                            ],
+                            [
+                                note(path, line_number, "one"),
+                                note(path, line_number, "two"),
+                                note(path, line_number, "three"),
+                            ],
+                        ),
+                        (line_number := 5): (
+                            [],
+                            [
+                                note(path, line_number, "four"),
+                            ],
+                        ),
+                        (line_number := 6): (
+                            [
+                                error(path, line_number, "arg-type", "hi"),
+                                error(path, line_number, "assignment", "three"),
+                            ],
+                            [
+                                error(path, line_number, "arg-type", "hi"),
+                            ],
+                        ),
+                    },
+                ),
+                (path := "two"): notices.DiffFileNotices(
+                    by_line_number={
+                        (line_number := 1): (
+                            [
+                                error(path, line_number, "arg-type", "two"),
+                            ],
+                            [
+                                error(path, line_number, "arg-type", "two"),
+                            ],
+                        )
+                    },
+                ),
+                (path := "three"): notices.DiffFileNotices(
+                    by_line_number={
+                        (line_number := 20): (
+                            [],
+                            [
+                                error(path, line_number, "arg-type", "two"),
+                            ],
+                        ),
+                        (line_number := 21): (
+                            [],
+                            [
+                                note(path, line_number, "stuff"),
+                            ],
+                        ),
+                    },
+                ),
+                (path := "three/four"): notices.DiffFileNotices(
+                    by_line_number={
+                        (line_number := 20): (
+                            [
+                                error(path, line_number, "arg-type", "two"),
+                            ],
+                            [],
+                        ),
+                        (line_number := 21): (
+                            [
+                                note(path, line_number, "stuff"),
+                            ],
+                            [],
+                        ),
+                    },
+                ),
+            }
+        )
+
+        with pytest.raises(AssertionError) as e:
+            expectations.compare_notices(diff)
+
+        expected = textwrap.dedent("""
+        > one
+          | ✘ 1:
+          | ✓ severity=note:: one
+          | ✘ !! GOT  !! severity=note:: two
+          |   !! WANT !! severity=note:: three
+          | ✘ !! GOT  !! severity=note:: three
+          |   !! WANT !! severity=note:: two
+          | ✘ 5:
+          | ✘ !! GOT  !! <NONE>
+          |   !! WANT !! severity=note:: four
+          | ✘ 6:
+          | ✓ severity=error[arg-type]:: hi
+          | ✘ !! GOT  !! severity=error[assignment]:: three
+          |   !! WANT !! <NONE>
+        > three
+          | ✘ 20:
+          | ✘ !! GOT  !! <NONE>
+          |   !! WANT !! severity=error[arg-type]:: two
+          | ✘ 21:
+          | ✘ !! GOT  !! <NONE>
+          |   !! WANT !! severity=note:: stuff
+        > three/four
+          | ✘ 20:
+          | ✘ !! GOT  !! severity=error[arg-type]:: two
+          |   !! WANT !! <NONE>
+          | ✘ 21:
+          | ✘ !! GOT  !! severity=note:: stuff
+          |   !! WANT !! <NONE>
+        > two
+          | ✓ 1: severity=error[arg-type]:: two
+          """).strip()
+
+        assert str(e.value).strip() == expected
