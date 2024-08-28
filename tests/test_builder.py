@@ -7,7 +7,7 @@ import pytest
 from pytest_typing_runner_test_driver import matchers, stubs
 
 from pytest_typing_runner import (
-    builder,
+    builders,
     expectations,
     file_changer,
     notice_changers,
@@ -29,7 +29,7 @@ class TestScenarioFile:
         def file_modification(*, path: str, content: str | None) -> None:
             pass
 
-        scenario_file = builder.ScenarioFile(
+        scenario_file = builders.ScenarioFile(
             path="one",
             root_dir=tmp_path,
             file_parser=file_parser,
@@ -55,7 +55,7 @@ class TestScenarioFile:
         def file_modification(*, path: str, content: str | None) -> None:
             called.append(("modify", path, content))
 
-        scenario_file = builder.ScenarioFile(
+        scenario_file = builders.ScenarioFile(
             path="one",
             root_dir=tmp_path,
             file_parser=file_parser,
@@ -77,7 +77,7 @@ class TestScenarioFile:
         def file_modification(*, path: str, content: str | None) -> None:
             called.append(("modify", path, content))
 
-        scenario_file = builder.ScenarioFile(
+        scenario_file = builders.ScenarioFile(
             path="one",
             root_dir=tmp_path,
             file_parser=file_parser,
@@ -108,7 +108,7 @@ class TestScenarioFile:
         def file_modification(*, path: str, content: str | None) -> None:
             called.append(("modify", path, content))
 
-        scenario_file = builder.ScenarioFile(
+        scenario_file = builders.ScenarioFile(
             path="one",
             root_dir=tmp_path,
             file_parser=file_parser1,
@@ -137,7 +137,7 @@ class TestScenarioFile:
         def file_modification(*, path: str, content: str | None) -> None:
             called.append(("modify", path, content))
 
-        scenario_file = builder.ScenarioFile(
+        scenario_file = builders.ScenarioFile(
             path="one",
             root_dir=tmp_path,
             file_parser=file_parser,
@@ -165,7 +165,7 @@ class TestScenarioFile:
         def file_modification(*, path: str, content: str | None) -> None:
             called.append(("modify", path, content))
 
-        scenario_file = builder.ScenarioFile(
+        scenario_file = builders.ScenarioFile(
             path="one",
             root_dir=tmp_path,
             file_parser=file_parser,
@@ -187,7 +187,7 @@ class TestScenarioFile:
         def file_modification(*, path: str, content: str | None) -> None:
             raise AssertionError("not called")
 
-        scenario_file = builder.ScenarioFile(
+        scenario_file = builders.ScenarioFile(
             path="one",
             root_dir=tmp_path,
             file_parser=file_parser,
@@ -214,7 +214,7 @@ class TestScenarioFile:
         def file_modification(*, path: str, content: str | None) -> None:
             called.append(("modify", path, content))
 
-        scenario_file = builder.ScenarioFile(
+        scenario_file = builders.ScenarioFile(
             path="one",
             root_dir=tmp_path,
             file_parser=file_parser,
@@ -247,7 +247,7 @@ class TestScenarioFile:
         def file_modification(*, path: str, content: str | None) -> None:
             called.append(("modify", path, content))
 
-        scenario_file = builder.ScenarioFile(
+        scenario_file = builders.ScenarioFile(
             path="one",
             root_dir=tmp_path,
             file_parser=file_parser1,
@@ -282,7 +282,7 @@ class TestScenarioFile:
         def file_modification(*, path: str, content: str | None) -> None:
             raise AssertionError("not used")
 
-        scenario_file = builder.ScenarioFile(
+        scenario_file = builders.ScenarioFile(
             path="one",
             root_dir=tmp_path,
             file_parser=file_parser,
@@ -337,7 +337,7 @@ class TestScenarioFile:
         def file_modification(*, path: str, content: str | None) -> None:
             raise AssertionError("not used")
 
-        scenario_file = builder.ScenarioFile(
+        scenario_file = builders.ScenarioFile(
             path="one",
             root_dir=tmp_path,
             file_parser=file_parser,
@@ -353,7 +353,7 @@ class TestScenarioFile:
 
 
 class TestUsingBuilder:
-    class Builder(builder.ScenarioBuilder[scenarios.Scenario, builder.ScenarioFile]):
+    class Builder(builders.ScenarioBuilder[scenarios.Scenario, builders.ScenarioFile]):
         pass
 
     @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -416,30 +416,30 @@ class TestUsingBuilder:
         return self.ScenarioRunner.create
 
     @pytest.fixture
-    def build(self, typing_scenario_runner: ScenarioRunner) -> Builder:
+    def builder(self, typing_scenario_runner: ScenarioRunner) -> Builder:
         return self.Builder(
             scenario_runner=typing_scenario_runner,
             scenario_file_maker=functools.partial(
-                builder.ScenarioFile,
+                builders.ScenarioFile,
                 file_parser=parse.FileContent().parse,
                 file_modification=typing_scenario_runner.file_modification,
             ),
         )
 
-    def test_things(self, build: Builder) -> None:
-        @build.run_and_check_after
+    def test_things(self, builder: Builder) -> None:
+        @builder.run_and_check_after
         def _() -> None:
-            build.on("main.py").set(
+            builder.on("main.py").set(
                 """
                 a: int = 1
                 # ^ REVEAL ^ builtins.int
                 """
             )
 
-        @build.run_and_check_after
+        @builder.run_and_check_after
         def _() -> None:
-            build.expect_failure()
-            build.on("main.py").append(
+            builder.expect_failure()
+            builder.on("main.py").append(
                 """
                 a = "asdf"
                 # ^ ERROR(assignment) ^ Incompatible types in assignment (expression has type "str", variable has type "int")

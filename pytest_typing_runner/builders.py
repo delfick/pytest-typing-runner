@@ -151,10 +151,10 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
         import functools
 
         import pytest
-        from pytest_typing_runner import builder, parse, protocols
+        from pytest_typing_runner import builders, parse, protocols
 
 
-        class Builder(builder.ScenarioBuilder[protocols.Scenario, builder.ScenarioFile]):
+        class Builder(builders.ScenarioBuilder[protocols.Scenario, builders.ScenarioFile]):
             pass
 
 
@@ -163,7 +163,7 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
             return Builder(
                 scenario_runner=typing_scenario_runner,
                 scenario_file_maker=functools.partial(
-                    builder.ScenarioFile,
+                    builders.ScenarioFile,
                     file_parser=parse.FileContent().parse,
                     file_modification=typing_scenario_runner.file_modification,
                 ),
@@ -239,6 +239,12 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
         Decorator to run some function before using run_and_check
 
         .. code-block::
+
+            from pytest_typing_runner import builders
+
+
+            builder: builders.ScenarioBuilder = ...
+
 
             @builder.run_and_check_after
             def _() -> None:
