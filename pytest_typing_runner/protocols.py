@@ -938,7 +938,7 @@ if TYPE_CHECKING:
     P_ScenarioRunsMaker = ScenarioRunsMaker[P_Scenario]
     P_ScenarioFileMaker = ScenarioFileMaker[P_ScenarioFile]
     P_ExpectationsMaker = ExpectationsMaker[P_Scenario]
-    P_ExpectationsSetup = ExpectationsSetup
+    P_ExpectationsSetup = ExpectationsSetup[P_Scenario]
     P_ScenarioRunnerMaker = ScenarioRunnerMaker[P_Scenario]
 
     P_Severity = Severity

@@ -10,6 +10,7 @@
    api/notices
    api/notice_changers
    api/parse
+   api/runners
    api/file_changer
 
 .. include:: ../README.rst

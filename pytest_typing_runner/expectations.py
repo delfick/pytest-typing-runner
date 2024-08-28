@@ -11,7 +11,13 @@ from . import notices, protocols
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class RunResult:
     """
-    A concrete implementation of protocols.RunResult.
+    Holds the result from running a type checker
+
+    Implements :protocol:`pytest_typing_runner.protocols.RunResult`
+
+    :param exit_code: The return code from running the type checker
+    :param stdout: A string of the stdout from running the type checker
+    :param stderr: A string of the stderr from running the type checker
     """
 
     exit_code: int
@@ -21,6 +27,16 @@ class RunResult:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Expectations(Generic[protocols.T_Scenario]):
+    """
+    Used to check the result of running a type checker against some expectation.
+
+    Implements :protocol:`pytest_typing_runner.protocols.Expectations`
+
+    :param expect_fail: Whether we expect the run to have failed.
+    :param expect_stderr: What we expect in the stderr
+    :param expect_notices: The notices expected from running the type checker
+    """
+
     expect_fail: bool = False
     expect_stderr: str = ""
     expect_notices: protocols.ProgramNotices = dataclasses.field(
@@ -28,13 +44,23 @@ class Expectations(Generic[protocols.T_Scenario]):
     )
 
     def check(self, *, notice_checker: protocols.NoticeChecker[protocols.T_Scenario]) -> None:
+        """
+        Used to pass in the epxected notices to the notice checker and the
+        check the stderr and exit_code on the run result.
+
+        :param notice_checker:
+            The object that holds the run result, runner that was used, and the
+            logic for checking the notices in the run result.
+        :raises AssertionError: If stderr on the result is different than expected
+        :raises AssertionError:
+            If exit code is non zero when we don't expect fail or if the exit
+            code is 0 when we do expect failure
+        """
         notice_checker.check(self.expect_notices)
 
         result = notice_checker.result
         assert result.stderr == self.expect_stderr
-        if self.expect_fail or any(
-            notice.severity == notices.ErrorSeverity("") for notice in self.expect_notices
-        ):
+        if self.expect_fail:
             assert result.exit_code != 0
         else:
             assert result.exit_code == 0
@@ -43,12 +69,32 @@ class Expectations(Generic[protocols.T_Scenario]):
     def setup_for_success(
         cls, *, options: protocols.RunOptions[protocols.T_Scenario]
     ) -> type[Self]:
+        """
+        Handy implementation of :protocol:`pytest_typing_runner.protocols.ExpectationsSetup`
+        """
         return cls
 
 
 def normalise_notices(
     notices: Sequence[protocols.ProgramNotice],
 ) -> Iterator[protocols.ProgramNotice]:
+    """
+    Used to split up notices that have multiline messages.
+
+    So instead of
+
+    ```
+    severity=note:: one\ntwo\nthree
+    ```
+
+    We get
+
+    ```
+    severity=note:: one
+    severity=note:: two
+    severity=note:: three
+    ```
+    """
     for notice in sorted(notices):
         if "\n" in notice.msg:
             for line in notice.msg.split("\n"):
@@ -58,6 +104,10 @@ def normalise_notices(
 
 
 def compare_notices(diff: protocols.DiffNotices) -> None:
+    """
+    Create a diff message and raise it inside an ``AssertionError`` if there is
+    a difference present in the provided diff.
+    """
     tick = "✓"
     cross = "✘"
 
@@ -112,3 +162,4 @@ if TYPE_CHECKING:
     _RR: protocols.RunResult = cast(RunResult, None)
 
     _E: protocols.P_Expectations = cast(Expectations[protocols.P_Scenario], None)
+    _SFS: protocols.P_ExpectationsSetup = Expectations[protocols.P_Scenario].setup_for_success
