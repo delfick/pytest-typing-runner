@@ -225,8 +225,8 @@ class TestProgramNotice:
             msg="d",
         )
 
-        original: Sequence[protocols.ProgramNotice] = [n1, n2, n3, n4, n5]
-        assert sorted(original) == [n1, n4, n5, n3, n2]
+        original: Sequence[protocols.ProgramNotice] = [n1, n3, n5, n4, n2]
+        assert sorted(original) == [n5, n1, n4, n2, n3]
 
     def test_it_can_match_against_another_program_notice(self, tmp_path: pathlib.Path) -> None:
         notice = notices.ProgramNotice(

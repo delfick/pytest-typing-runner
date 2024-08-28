@@ -140,7 +140,9 @@ class ProgramNotice:
 
         Orders by comparing the "display" string
         """
-        return self.display() < other.display()
+        left = (self.location, self.line_number, self.display())
+        right = (other.location, other.line_number, other.display())
+        return left < right
 
     def matches(self, other: protocols.ProgramNotice) -> bool:
         """
