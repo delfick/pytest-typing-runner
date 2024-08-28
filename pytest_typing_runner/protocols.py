@@ -947,23 +947,26 @@ if TYPE_CHECKING:
     P_ProgramNotice = ProgramNotice
     P_ProgramNotices = ProgramNotices
     P_FileNoticesParser = FileNoticesParser
-    P_ProgramNoticesChanger = ProgramNoticesChanger
     P_FileNoticesChanger = FileNoticesChanger
     P_LineNoticesChanger = FileNoticesChanger
     P_ProgramNoticeChanger = ProgramNoticeChanger
+    P_ProgramNoticesChanger = ProgramNoticesChanger
+
     P_DiffNotices = DiffNotices
     P_DiffFileNotices = DiffFileNotices
 
-    P_FileModifier = FileModifier
     P_RunOptions = RunOptions[P_Scenario]
-    P_RunResult = RunResult
     P_NoticeChecker = NoticeChecker[P_Scenario]
-    P_RunnerConfig = RunnerConfig
     P_ProgramRunner = ProgramRunner[P_Scenario]
     P_ProgramRunnerMaker = ProgramRunnerMaker[P_Scenario]
-    P_ProgramRunnerChooser = ProgramRunnerChooser
+
+    P_RunResult = RunResult
     P_RunCleaner = RunCleaner
     P_RunCleaners = RunCleaners
+    P_FileModifier = FileModifier
+    P_RunnerConfig = RunnerConfig
+    P_ProgramRunnerChooser = ProgramRunnerChooser
+
     P_Strategy = Strategy
     P_StrategyMaker = StrategyMaker
     P_StrategyRegistry = StrategyRegistry
