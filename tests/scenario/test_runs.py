@@ -71,11 +71,11 @@ class TestRunCleaners:
 class TestScenarioRun:
     @pytest.fixture
     def options(self, tmp_path: pathlib.Path) -> protocols.RunOptions[protocols.Scenario]:
-        scenario_runner = scenarios.ScenarioRunner.create(
+        scenario_runner = scenarios.ScenarioRunner[protocols.Scenario].create(
             config=stubs.StubRunnerConfig(),
             root_dir=tmp_path,
             scenario_maker=scenarios.Scenario.create,
-            scenario_runs_maker=scenarios.ScenarioRuns,
+            scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
         return scenario_runner.determine_options()
 
@@ -258,12 +258,19 @@ class TestScenarioRun:
 class TestScenarioRuns:
     @pytest.fixture
     def runner(self, tmp_path: pathlib.Path) -> protocols.ScenarioRunner[protocols.Scenario]:
-        return scenarios.ScenarioRunner.create(
+        return scenarios.ScenarioRunner[protocols.Scenario].create(
             config=stubs.StubRunnerConfig(),
             root_dir=tmp_path,
             scenario_maker=scenarios.Scenario.create,
-            scenario_runs_maker=scenarios.ScenarioRuns,
+            scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
+
+    def test_it_has_create_classmethod(
+        self, runner: scenarios.ScenarioRunner[protocols.Scenario]
+    ) -> None:
+        runs = scenarios.ScenarioRuns.create(scenario=runner.scenario)
+        assert isinstance(runs, scenarios.ScenarioRuns)
+        assert runs.scenario is runner.scenario
 
     def test_it_has_a_scenario(self, runner: protocols.ScenarioRunner[protocols.Scenario]) -> None:
         options = runner.determine_options()

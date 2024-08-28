@@ -34,7 +34,7 @@ def typing_scenario_runner_maker(
 def typing_scenario_runs_maker(
     typing_scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
 ) -> protocols.ScenarioRunsMaker[protocols.T_Scenario]:
-    return scenarios.ScenarioRuns
+    return scenarios.ScenarioRuns.create
 
 
 @pytest.fixture

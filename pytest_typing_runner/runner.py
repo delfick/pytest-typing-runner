@@ -11,6 +11,7 @@ from collections.abc import Iterator, MutableMapping, MutableSequence, Sequence
 from typing import TYPE_CHECKING, ClassVar, Generic, TextIO, cast
 
 import pytest
+from typing_extensions import Self, Unpack
 
 from . import expectations, parse, protocols
 
@@ -29,6 +30,12 @@ class RunOptions(Generic[protocols.T_Scenario]):
     do_followup: bool
     environment_overrides: MutableMapping[str, str | None]
     cleaners: protocols.RunCleaners
+
+    def clone(self, **kwargs: Unpack[protocols.RunOptionsCloneArgs]) -> Self:
+        """
+        Return a clone of the options with different options
+        """
+        return dataclasses.replace(self, **kwargs)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

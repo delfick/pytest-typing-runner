@@ -62,6 +62,12 @@ class StubRunnerConfig:
     )
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class StubExpectations(Generic[protocols.T_Scenario]):
+    def check(self, *, notice_checker: protocols.NoticeChecker[protocols.T_Scenario]) -> None:
+        pass
+
+
 if TYPE_CHECKING:
     _SRR: protocols.P_RunResult = cast(StubRunResult, None)
     _SNC: protocols.P_NoticeChecker = cast(StubNoticeChecker[protocols.P_Scenario], None)
@@ -70,3 +76,4 @@ if TYPE_CHECKING:
     _SS: protocols.P_Strategy = cast(StubStrategy, None)
     _SM: protocols.P_StrategyMaker = StubStrategy
     _SRC: protocols.P_RunnerConfig = cast(StubRunnerConfig, None)
+    _E: protocols.P_Expectations = cast(StubExpectations[protocols.P_Scenario], None)

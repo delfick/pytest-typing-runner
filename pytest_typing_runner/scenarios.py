@@ -197,6 +197,13 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
         init=False, default_factory=list
     )
 
+    @classmethod
+    def create(cls, *, scenario: protocols.T_Scenario) -> Self:
+        """
+        Helpful classmethod implementing :protocol:`pytest_typing_runner.protocols.ScenarioRunsMaker`
+        """
+        return cls(scenario=scenario)
+
     def for_report(self) -> Iterator[str]:
         """
         Yields lines for a pytest report indented and with a heading for each run.
@@ -340,7 +347,10 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         if location.exists():
             if content is None:
                 action = "delete"
-                shutil.rmtree(location)
+                if location.is_dir():
+                    shutil.rmtree(location)
+                else:
+                    location.unlink()
             else:
                 action = "change"
                 new_content = textwrap.dedent(content)
@@ -413,10 +423,10 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
 
         make_expectations = setup_expectations(options=options)
         checker = self.execute_static_checking(options=options)
-        expectations = make_expectations(notice_checker=checker)
+        expectations = make_expectations()
 
         try:
-            expectations.check()
+            expectations.check(notice_checker=checker)
         except Exception as err:
             self.runs.add_run(checker=checker, expectation_error=err)
             raise
@@ -425,11 +435,11 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
 
         if options.do_followup and run.is_first:
             repeat_expectations: protocols.ExpectationsSetup[protocols.T_Scenario] = (
-                lambda options: lambda notice_checker: expectations
+                lambda options: lambda: expectations
             )
             self.run_and_check(repeat_expectations, _options=options)
 
-    def determine_options(self) -> runner.RunOptions[protocols.T_Scenario]:
+    def determine_options(self) -> protocols.RunOptions[protocols.T_Scenario]:
         """
         Used by ``run_and_check`` to determine run options.
         """

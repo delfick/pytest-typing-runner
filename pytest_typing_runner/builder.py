@@ -113,7 +113,7 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
             if _change_expectations is not None:
                 _change_expectations()
 
-            return self.make_expectations
+            return functools.partial(self.make_expectations, options=options)
 
         return self.scenario_runner.run_and_check(setup_expectations)
 
@@ -121,13 +121,12 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
         self.run_and_check(_change_expectations=action)
 
     def make_expectations(
-        self, *, notice_checker: protocols.NoticeChecker[protocols.T_Scenario]
+        self, *, options: protocols.RunOptions[protocols.T_Scenario]
     ) -> protocols.Expectations[protocols.T_Scenario]:
-        root_dir = notice_checker.runner.options.cwd
-        program_notices = notice_checker.runner.options.scenario_runner.generate_program_notices()
+        root_dir = options.cwd
+        program_notices = options.scenario_runner.generate_program_notices()
 
         return expectations.Expectations(
-            notice_checker=notice_checker,
             expect_fail=self.scenario_runner.scenario.expects.failure,
             expect_stderr="",
             expect_notices=program_notices.set_files(

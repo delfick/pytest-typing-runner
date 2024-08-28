@@ -38,6 +38,19 @@ class RunCleaners(Protocol):
         """
 
 
+class RunOptionsCloneArgs(TypedDict):
+    """
+    Used to represent the options that can be changed when cloning run options
+    """
+
+    cwd: NotRequired[pathlib.Path]
+    args: NotRequired[MutableSequence[str]]
+    check_paths: NotRequired[MutableSequence[str]]
+    do_followup: NotRequired[bool]
+    environment_overrides: NotRequired[MutableMapping[str, str | None]]
+    cleaners: NotRequired[RunCleaners]
+
+
 class RunOptions(Protocol[T_Scenario]):
     """
     Used to represent the options used to run a type checker
@@ -89,6 +102,11 @@ class RunOptions(Protocol[T_Scenario]):
     def cleaners(self) -> RunCleaners:
         """
         Registry of cleanup functions for after the test has run
+        """
+
+    def clone(self, **kwargs: Unpack[RunOptionsCloneArgs]) -> Self:
+        """
+        Used to provide a copy with certain options changed
         """
 
 
@@ -699,13 +717,7 @@ class Expectations(Protocol[T_Scenario]):
     This objects knows what to expect from running the static type checker
     """
 
-    @property
-    def notice_checker(self) -> NoticeChecker[T_Scenario]:
-        """
-        The result to check
-        """
-
-    def check(self) -> None:
+    def check(self, *, notice_checker: NoticeChecker[T_Scenario]) -> None:
         """
         Used to check the result against these expectations
         """
@@ -716,9 +728,7 @@ class ExpectationsMaker(Protocol[T_Scenario]):
     Callable that creates an Expectations object
     """
 
-    def __call__(
-        self, *, notice_checker: NoticeChecker[T_Scenario]
-    ) -> Expectations[T_Scenario]: ...
+    def __call__(self) -> Expectations[T_Scenario]: ...
 
 
 class ExpectationsSetup(Protocol[T_Scenario]):

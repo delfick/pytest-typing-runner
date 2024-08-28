@@ -21,18 +21,16 @@ class RunResult:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Expectations(Generic[protocols.T_Scenario]):
-    notice_checker: protocols.NoticeChecker[protocols.T_Scenario]
-
     expect_fail: bool = False
     expect_stderr: str = ""
     expect_notices: protocols.ProgramNotices = dataclasses.field(
         default_factory=notices.ProgramNotices
     )
 
-    def check(self) -> None:
-        self.notice_checker.check(self.expect_notices)
+    def check(self, *, notice_checker: protocols.NoticeChecker[protocols.T_Scenario]) -> None:
+        notice_checker.check(self.expect_notices)
 
-        result = self.notice_checker.result
+        result = notice_checker.result
         assert result.stderr == self.expect_stderr
         if self.expect_fail or any(
             notice.severity == notices.ErrorSeverity("") for notice in self.expect_notices
