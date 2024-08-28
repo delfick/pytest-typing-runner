@@ -32,7 +32,6 @@ class RunOptions(Generic[protocols.T_Scenario]):
     :param environment_overrides:
         Any additions, changes or deletions to the environment variables for
         running the type checker
-    :param cleaners: Used to register any cleanup for the end of the test
     """
 
     scenario_runner: protocols.ScenarioRunner[protocols.T_Scenario]
@@ -42,7 +41,6 @@ class RunOptions(Generic[protocols.T_Scenario]):
     check_paths: MutableSequence[str]
     do_followup: bool
     environment_overrides: MutableMapping[str, str | None]
-    cleaners: protocols.RunCleaners
 
     def clone(
         self,
@@ -367,7 +365,7 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
         Also registers a cleaner that ensures that dmypy has been stopped when
         the rest of the test has finished.
         """
-        self.options.cleaners.add(
+        self.options.scenario_runner.cleaners.add(
             f"program_runner::dmypy::{self.options.cwd}",
             functools.partial(self._cleanup, cwd=self.options.cwd),
         )

@@ -48,7 +48,6 @@ class RunOptionsCloneArgs(TypedDict):
     check_paths: NotRequired[MutableSequence[str]]
     do_followup: NotRequired[bool]
     environment_overrides: NotRequired[MutableMapping[str, str | None]]
-    cleaners: NotRequired[RunCleaners]
 
 
 class RunOptions(Protocol[T_Scenario]):
@@ -96,12 +95,6 @@ class RunOptions(Protocol[T_Scenario]):
     def environment_overrides(self) -> MutableMapping[str, str | None]:
         """
         Overrides of environment variables for when running the type checker
-        """
-
-    @property
-    def cleaners(self) -> RunCleaners:
-        """
-        Registry of cleanup functions for after the test has run
         """
 
     def clone(

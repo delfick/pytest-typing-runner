@@ -160,7 +160,6 @@ class TestScenarioRunner:
         assert options.args == ["one", "two"]
         assert options.do_followup is False
         assert options.environment_overrides == {}
-        assert options.cleaners is runner.cleaners
 
         # And make sure args is a copy
         options.args.append("three")

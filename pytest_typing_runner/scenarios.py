@@ -448,7 +448,6 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
             args=list(self.program_runner_maker.default_args),
             do_followup=self.program_runner_maker.do_followups,
             environment_overrides={},
-            cleaners=self.cleaners,
         )
 
     def normalise_program_runner_notice(
