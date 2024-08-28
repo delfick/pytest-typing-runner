@@ -56,6 +56,43 @@ class RunOptions(Generic[protocols.T_Scenario]):
         else:
             return dataclasses.replace(self, make_program_runner=make_program_runner, **kwargs)
 
+    @classmethod
+    def create(
+        cls,
+        scenario_runner: protocols.ScenarioRunner[protocols.T_Scenario],
+        *,
+        cwd: pathlib.Path | None = None,
+        do_followup: bool | None = None,
+        program_runner_maker: protocols.ProgramRunnerMaker[protocols.T_Scenario] | None = None,
+        modify_options: protocols.RunOptionsModify | None = None,
+    ) -> protocols.RunOptions[protocols.T_Scenario]:
+        """
+        Used by ``run_and_check`` to determine run options.
+        """
+        if cwd is None:
+            cwd = scenario_runner.scenario.root_dir
+
+        if program_runner_maker is None:
+            program_runner_maker = scenario_runner.default_program_runner_maker
+
+        if do_followup is None:
+            do_followup = program_runner_maker.do_followups
+
+        options: protocols.RunOptions[protocols.T_Scenario] = cls(
+            cwd=cwd,
+            scenario_runner=scenario_runner,
+            make_program_runner=program_runner_maker,
+            do_followup=do_followup,
+            check_paths=["."],
+            environment_overrides={},
+            args=list(program_runner_maker.default_args),
+        )
+
+        if modify_options is not None:
+            options = modify_options(options)
+
+        return options
+
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MypyChecker(Generic[protocols.T_Scenario]):

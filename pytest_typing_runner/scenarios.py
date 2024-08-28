@@ -262,7 +262,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
     Implements :protocol:`pytest_typing_runner.protocols.ScenarioRuns`
 
     :param scenario: The scenario being controlled
-    :param program_runner_maker: Used to make the program runner
+    :param default_program_runner_maker: Default maker for the program runner
     :param runs: Used to hold a record of each run of the type checker
     :param cleaners:
         A collection of cleanup functions that are used in the pytest fixture
@@ -271,9 +271,9 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
     """
 
     scenario: protocols.T_Scenario
-    program_runner_maker: protocols.ProgramRunnerMaker[protocols.T_Scenario]
     runs: protocols.ScenarioRuns[protocols.T_Scenario]
     cleaners: protocols.RunCleaners
+    default_program_runner_maker: protocols.ProgramRunnerMaker[protocols.T_Scenario]
 
     @classmethod
     def create(
@@ -295,7 +295,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         scenario = scenario_maker(config=config, root_dir=root_dir)
         return cls(
             scenario=scenario,
-            program_runner_maker=config.typing_strategy_maker().program_runner_chooser(
+            default_program_runner_maker=config.typing_strategy_maker().program_runner_chooser(
                 config=config, scenario=scenario
             ),
             runs=scenario_runs_maker(scenario=scenario),
@@ -440,15 +440,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         """
         Used by ``run_and_check`` to determine run options.
         """
-        return runners.RunOptions(
-            scenario_runner=self,
-            make_program_runner=self.program_runner_maker,
-            cwd=self.scenario.root_dir,
-            check_paths=["."],
-            args=list(self.program_runner_maker.default_args),
-            do_followup=self.program_runner_maker.do_followups,
-            environment_overrides={},
-        )
+        return runners.RunOptions.create(self)
 
     def normalise_program_runner_notice(
         self,

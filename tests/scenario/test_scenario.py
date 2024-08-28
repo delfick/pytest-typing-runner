@@ -40,12 +40,12 @@ class TestScenarioRunner:
 
         runner = scenarios.ScenarioRunner(
             scenario=scenario,
-            program_runner_maker=program_runner_maker,
+            default_program_runner_maker=program_runner_maker,
             runs=runs,
             cleaners=cleaners,
         )
         assert runner.scenario is scenario
-        assert runner.program_runner_maker is program_runner_maker
+        assert runner.default_program_runner_maker is program_runner_maker
         assert runner.runs is runs
         assert runner.cleaners is cleaners
 
@@ -59,7 +59,7 @@ class TestScenarioRunner:
             scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
         assert isinstance(runner.scenario, scenarios.Scenario)
-        assert isinstance(runner.program_runner_maker, stubs.StubProgramRunnerMaker)
+        assert isinstance(runner.default_program_runner_maker, stubs.StubProgramRunnerMaker)
         assert isinstance(runner.runs, scenarios.ScenarioRuns)
         assert isinstance(runner.cleaners, scenarios.RunCleaners)
 
@@ -128,7 +128,7 @@ class TestScenarioRunner:
         scenario: protocols.Scenario = scenarios.Scenario.create(config, tmp_path)
         runner = scenarios.ScenarioRunner(
             scenario=scenario,
-            program_runner_maker=make_program_runner,
+            default_program_runner_maker=make_program_runner,
             runs=scenarios.ScenarioRuns(scenario=scenario),
             cleaners=scenarios.RunCleaners(),
         )
@@ -147,7 +147,7 @@ class TestScenarioRunner:
         scenario: protocols.Scenario = scenarios.Scenario.create(config, tmp_path)
         runner = scenarios.ScenarioRunner(
             scenario=scenario,
-            program_runner_maker=make_program_runner,
+            default_program_runner_maker=make_program_runner,
             runs=scenarios.ScenarioRuns(scenario=scenario),
             cleaners=scenarios.RunCleaners(),
         )

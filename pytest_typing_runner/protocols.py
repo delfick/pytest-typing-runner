@@ -108,6 +108,14 @@ class RunOptions(Protocol[T_Scenario]):
         """
 
 
+class RunOptionsModify(Protocol):
+    """
+    Represents a function that can return a modified run options
+    """
+
+    def __call__(self, options: RunOptions[T_Scenario], /) -> RunOptions[T_Scenario]: ...
+
+
 class FileModifier(Protocol):
     """
     Represents a function that can change a file in the scenario
@@ -804,9 +812,9 @@ class ScenarioRunner(Protocol[T_Scenario]):
         """
 
     @property
-    def program_runner_maker(self) -> ProgramRunnerMaker[T_Scenario]:
+    def default_program_runner_maker(self) -> ProgramRunnerMaker[T_Scenario]:
         """
-        Constructor for making a program runner
+        Default constructor for making a program runner
         """
 
     @property
@@ -960,6 +968,7 @@ if TYPE_CHECKING:
     P_RunCleaners = RunCleaners
     P_FileModifier = FileModifier
     P_RunnerConfig = RunnerConfig
+    P_RunOptionsModify = RunOptionsModify
     P_ProgramRunnerChooser = ProgramRunnerChooser
 
     P_Strategy = Strategy
