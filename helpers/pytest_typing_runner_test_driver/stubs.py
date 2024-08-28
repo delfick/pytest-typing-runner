@@ -22,7 +22,7 @@ class StubNoticeChecker(Generic[protocols.T_Scenario]):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class StubRunner(Generic[protocols.T_Scenario]):
+class StubProgramRunner(Generic[protocols.T_Scenario]):
     options: protocols.RunOptions[protocols.T_Scenario]
 
     def run(self) -> protocols.NoticeChecker[protocols.T_Scenario]:
@@ -38,7 +38,7 @@ class StubProgramRunnerMaker(Generic[protocols.T_Scenario]):
     do_followups: bool = True
     is_daemon: bool = False
 
-    runner_kls: type[StubRunner[protocols.T_Scenario]] = StubRunner
+    runner_kls: type[StubProgramRunner[protocols.T_Scenario]] = StubProgramRunner
 
     def __call__(
         self, *, options: protocols.RunOptions[protocols.T_Scenario]
@@ -73,7 +73,7 @@ class StubExpectations(Generic[protocols.T_Scenario]):
 if TYPE_CHECKING:
     _SRR: protocols.P_RunResult = cast(StubRunResult, None)
     _SNC: protocols.P_NoticeChecker = cast(StubNoticeChecker[protocols.P_Scenario], None)
-    _SR: protocols.P_ProgramRunner = cast(StubRunner[protocols.P_Scenario], None)
+    _SR: protocols.P_ProgramRunner = cast(StubProgramRunner[protocols.P_Scenario], None)
     _SRM: protocols.P_ProgramRunnerMaker = cast(StubProgramRunnerMaker[protocols.P_Scenario], None)
     _SS: protocols.P_Strategy = cast(StubStrategy, None)
     _SM: protocols.P_StrategyMaker = StubStrategy

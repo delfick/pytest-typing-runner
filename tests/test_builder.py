@@ -367,7 +367,7 @@ class TestUsingBuilder:
         pass
 
     @dataclasses.dataclass(frozen=True, kw_only=True)
-    class ProgramRunner(stubs.StubRunner[Scenario]):
+    class ProgramRunner(stubs.StubProgramRunner[Scenario]):
         options: protocols.RunOptions[TestUsingBuilder.Scenario]
 
         def run(self) -> protocols.NoticeChecker[TestUsingBuilder.Scenario]:
