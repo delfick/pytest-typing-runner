@@ -126,7 +126,7 @@ class ScenarioFile:
         replacement, file_notices = parser(original, into=file_notices)
         assert (
             replacement == original
-        ), "Contents of {self.path} were not transformed when written to disk"
+        ), f"Contents of '{self.path}' were not transformed when written to disk"
 
         for instruction in self._overrides:
             changed = instruction(file_notices)
