@@ -13,32 +13,33 @@ additional attributes/methods to the Scenario in their project and create
 implementations of the other objects that reach out to those extra attributes
 and methods.
 
-The default implementation of this protocol is:
+Relevant protocols
+------------------
 
-.. autoclass:: pytest_typing_runner.scenarios.Expects
-    :members:
-    :member-order: bysource
+* :protocol:`pytest_typing_runner.protocols.Scenario`
+* :protocol:`pytest_typing_runner.protocols.ScenarioRunner`
+
+The default implementation of these are:
 
 .. autoclass:: pytest_typing_runner.scenarios.Scenario
     :members:
     :member-order: bysource
 
-The scenario runner
--------------------
-
 .. autoclass:: pytest_typing_runner.scenarios.ScenarioRunner
     :members:
     :member-order: bysource
 
-The runner config
------------------
+
+More default implementations
+----------------------------
 
 .. autoclass:: pytest_typing_runner.scenarios.RunnerConfig
     :members:
     :member-order: bysource
 
-More default implementations
-----------------------------
+.. autoclass:: pytest_typing_runner.scenarios.Expects
+    :members:
+    :member-order: bysource
 
 .. autoclass:: pytest_typing_runner.scenarios.ScenarioRun
     :members:
