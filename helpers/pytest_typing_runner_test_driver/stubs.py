@@ -38,10 +38,12 @@ class StubProgramRunnerMaker(Generic[protocols.T_Scenario]):
     do_followups: bool = True
     is_daemon: bool = False
 
+    runner_kls: type[StubRunner[protocols.T_Scenario]] = StubRunner
+
     def __call__(
         self, *, options: protocols.RunOptions[protocols.T_Scenario]
     ) -> protocols.ProgramRunner[protocols.T_Scenario]:
-        return StubRunner(options=options)
+        return self.runner_kls(options=options)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

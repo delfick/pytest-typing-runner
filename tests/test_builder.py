@@ -1,9 +1,22 @@
+import dataclasses
+import functools
 import pathlib
+import textwrap
 
 import pytest
-from pytest_typing_runner_test_driver import matchers
+from pytest_typing_runner_test_driver import matchers, stubs
 
-from pytest_typing_runner import builder, file_changer, notice_changers, notices, protocols
+from pytest_typing_runner import (
+    builder,
+    expectations,
+    file_changer,
+    notice_changers,
+    notices,
+    parse,
+    protocols,
+    runner,
+    scenarios,
+)
 
 
 class TestScenarioFile:
@@ -337,3 +350,98 @@ class TestScenarioFile:
             scenario_file.notices(into=into)
 
         assert str(e.value) == "Contents of 'one' were not transformed when written to disk"
+
+
+class TestUsingBuilder:
+    class Builder(builder.ScenarioBuilder[scenarios.Scenario, builder.ScenarioFile]):
+        pass
+
+    @dataclasses.dataclass(frozen=True, kw_only=True)
+    class ProgramRunner(stubs.StubRunner[protocols.T_Scenario]):
+        options: protocols.RunOptions[protocols.T_Scenario]
+
+        def run(self) -> protocols.NoticeChecker[protocols.T_Scenario]:
+            success_out = textwrap.dedent("""
+            main.py:3: note: Revealed type is "builtins.int"
+            Success: no issues found in 2 source files
+            """).strip()
+
+            error_out = textwrap.dedent("""
+            main.py:3: note: Revealed type is "builtins.int"
+            main.py:7: error: Incompatible types in assignment (expression has type "str", variable has type "int")  [assignment]
+            Found 1 error in 1 file (checked 2 source files)
+            """).strip()
+
+            first_content = textwrap.dedent("""
+            a: int = 1
+            reveal_type(a)
+            # ^ REVEAL ^ builtins.int
+            """).strip()
+
+            second_content = textwrap.dedent("""
+            a: int = 1
+            reveal_type(a)
+            # ^ REVEAL ^ builtins.int
+
+
+            a = "asdf"
+            # ^ ERROR(assignment) ^ Incompatible types in assignment (expression has type "str", variable has type "int")
+            """).strip()
+
+            found = (self.options.cwd / "main.py").read_text().strip()
+            if found == first_content:
+                result = expectations.RunResult(exit_code=0, stderr="", stdout=success_out)
+            elif found == second_content:
+                result = expectations.RunResult(exit_code=1, stderr="", stdout=error_out)
+            else:
+                raise AssertionError(found)
+
+            return runner.MypyChecker(result=result, runner=self)
+
+        def short_display(self) -> str:
+            return "stubrunner"
+
+    @dataclasses.dataclass(frozen=True, kw_only=True)
+    class ScenarioRunner(scenarios.ScenarioRunner[scenarios.Scenario]):
+        def determine_options(self) -> protocols.RunOptions[scenarios.Scenario]:
+            options = super().determine_options()
+            return options.clone(
+                make_program_runner=stubs.StubProgramRunnerMaker[scenarios.Scenario](
+                    runner_kls=TestUsingBuilder.ProgramRunner
+                )
+            )
+
+    @pytest.fixture
+    def typing_scenario_runner_maker(self) -> protocols.ScenarioRunnerMaker[scenarios.Scenario]:
+        return self.ScenarioRunner.create
+
+    @pytest.fixture
+    def build(self, typing_scenario_runner: ScenarioRunner) -> Builder:
+        return self.Builder(
+            scenario_runner=typing_scenario_runner,
+            scenario_file_maker=functools.partial(
+                builder.ScenarioFile,
+                file_parser=parse.FileContent().parse,
+                file_modification=typing_scenario_runner.file_modification,
+            ),
+        )
+
+    def test_things(self, build: Builder) -> None:
+        @build.run_and_check_after
+        def _() -> None:
+            build.on("main.py").set(
+                """
+                a: int = 1
+                # ^ REVEAL ^ builtins.int
+                """
+            )
+
+        @build.run_and_check_after
+        def _() -> None:
+            build.expect_failure()
+            build.on("main.py").append(
+                """
+                a = "asdf"
+                # ^ ERROR(assignment) ^ Incompatible types in assignment (expression has type "str", variable has type "int")
+                """
+            )

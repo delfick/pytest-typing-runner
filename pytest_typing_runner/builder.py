@@ -162,7 +162,7 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
         def build(typing_scenario_runner: protocols.ScenarioRunner[protocols.Scenario]) -> Builder:
             return Builder(
                 scenario_runner=typing_scenario_runner,
-                file_changer=functools.partial(
+                scenario_file_maker=functools.partial(
                     builder.ScenarioFile,
                     file_parser=parse.FileContent().parse,
                     file_modification=typing_scenario_runner.file_modification,
@@ -190,11 +190,11 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
                     """
                 )
 
-    :param file_changer: Used to make a scenario file object for each file
+    :param scenario_file_maker: Used to make a scenario file object for each file
     :param scenario_runner: The ScenarioRunner for that Scenario
     '''
 
-    file_changer: protocols.ScenarioFileMaker[T_CO_ScenarioFile]
+    scenario_file_maker: protocols.ScenarioFileMaker[T_CO_ScenarioFile]
     scenario_runner: protocols.ScenarioRunner[protocols.T_Scenario]
 
     _known_files: MutableMapping[str, T_CO_ScenarioFile] = dataclasses.field(
@@ -209,7 +209,7 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
         :returns: The ScenarioFile object for this path
         """
         if path not in self._known_files:
-            self._known_files[path] = self.file_changer(
+            self._known_files[path] = self.scenario_file_maker(
                 path=path, root_dir=self.scenario_runner.scenario.root_dir
             )
         return self._known_files[path]

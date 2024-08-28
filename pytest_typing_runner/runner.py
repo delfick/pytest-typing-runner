@@ -31,11 +31,19 @@ class RunOptions(Generic[protocols.T_Scenario]):
     environment_overrides: MutableMapping[str, str | None]
     cleaners: protocols.RunCleaners
 
-    def clone(self, **kwargs: Unpack[protocols.RunOptionsCloneArgs]) -> Self:
+    def clone(
+        self,
+        *,
+        make_program_runner: protocols.ProgramRunnerMaker[protocols.T_Scenario] | None = None,
+        **kwargs: Unpack[protocols.RunOptionsCloneArgs],
+    ) -> Self:
         """
         Return a clone of the options with different options
         """
-        return dataclasses.replace(self, **kwargs)
+        if make_program_runner is None:
+            return dataclasses.replace(self, **kwargs)
+        else:
+            return dataclasses.replace(self, make_program_runner=make_program_runner, **kwargs)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

@@ -104,7 +104,12 @@ class RunOptions(Protocol[T_Scenario]):
         Registry of cleanup functions for after the test has run
         """
 
-    def clone(self, **kwargs: Unpack[RunOptionsCloneArgs]) -> Self:
+    def clone(
+        self,
+        *,
+        make_program_runner: ProgramRunnerMaker[T_Scenario] | None = None,
+        **kwargs: Unpack[RunOptionsCloneArgs],
+    ) -> Self:
         """
         Used to provide a copy with certain options changed
         """
