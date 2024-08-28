@@ -1,10 +1,11 @@
-from . import builders, expectations, file_changer, notices, protocols, runner, scenarios
+from . import builders, expectations, file_changers, notices, parse, protocols, runners, scenarios
 from .errors import PyTestTypingRunnerException
 
 __all__ = [
-    "runner",
+    "runners",
+    "parse",
     "protocols",
-    "file_changer",
+    "file_changers",
     "expectations",
     "notices",
     "scenarios",

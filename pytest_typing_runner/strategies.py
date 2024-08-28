@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self
 
-from . import errors, protocols, runner
+from . import errors, protocols, runners
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -193,14 +193,14 @@ class MypyChoice(Generic[protocols.T_Scenario]):
         Create the program runner to use
 
         If ``same_process`` we choose
-        :class:`pytest_typing_runner.runner.SameProcessMypyRunner`
+        :class:`pytest_typing_runner.runners.SameProcessMypyRunner`
         otherwise we choose
-        :class:`pytest_typing_runner.runner.ExternalMypyRunner`
+        :class:`pytest_typing_runner.runners.ExternalMypyRunner`
         """
         if self.same_process:
-            return runner.SameProcessMypyRunner(options=options)
+            return runners.SameProcessMypyRunner(options=options)
         else:
-            return runner.ExternalMypyRunner(options=options)
+            return runners.ExternalMypyRunner(options=options)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -221,11 +221,11 @@ class DaemonMypyChoice(MypyChoice[protocols.T_Scenario]):
     ) -> protocols.ProgramRunner[protocols.T_Scenario]:
         """
         Returns an instance of
-        :class:`pytest_typing_runner.runner.ExternalDaemonMypyRunner`
+        :class:`pytest_typing_runner.runners.ExternalDaemonMypyRunner`
         """
         if self.same_process:
             raise ValueError("The mypy daemon cannot be run in the same process")
-        return runner.ExternalDaemonMypyRunner(options=options)
+        return runners.ExternalDaemonMypyRunner(options=options)
 
 
 def _make_no_incremental_strategy() -> protocols.Strategy:

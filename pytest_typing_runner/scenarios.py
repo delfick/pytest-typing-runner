@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self
 
-from . import notices, protocols, runner
+from . import notices, protocols, runners
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -443,7 +443,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         """
         Used by ``run_and_check`` to determine run options.
         """
-        return runner.RunOptions(
+        return runners.RunOptions(
             scenario_runner=self,
             make_program_runner=self.program_runner_maker,
             cwd=self.scenario.root_dir,

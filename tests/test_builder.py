@@ -11,12 +11,12 @@ from pytest_typing_runner_test_driver import matchers, stubs
 from pytest_typing_runner import (
     builders,
     expectations,
-    file_changer,
+    file_changers,
     notice_changers,
     notices,
     parse,
     protocols,
-    runner,
+    runners,
     scenarios,
 )
 
@@ -196,7 +196,7 @@ class TestScenarioFile:
             file_modification=file_modification,
         )
 
-        with pytest.raises(file_changer.LocationDoesNotExist):
+        with pytest.raises(file_changers.LocationDoesNotExist):
             scenario_file.append("extra")
 
     def test_it_can_be_told_to_not_complain_if_file_does_not_exist(
@@ -408,7 +408,7 @@ class TestUsingBuilder:
             else:
                 raise AssertionError(found)
 
-            return runner.MypyChecker(result=result, runner=self)
+            return runners.MypyChecker(result=result, runner=self)
 
         def short_display(self) -> str:
             return "stubrunner"

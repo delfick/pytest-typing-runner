@@ -66,10 +66,10 @@ class FileAppender:
 
     .. code-block:: python
 
-        from pytest_typing_runner import file_changer
+        from pytest_typing_runner import file_changers
 
 
-        appender = file_changer.FileAppender(
+        appender = file_changers.FileAppender(
             root_dir=root_dir,
             path="path/to/file.py",
             extra_content=textwrap.dedent(
@@ -130,10 +130,10 @@ class CopyDirectory:
 
     .. code-block:: python
 
-        from pytest_typing_runner import file_changer
+        from pytest_typing_runner import file_changers
 
 
-        copier = file_changer.CopyDirectory(
+        copier = file_changers.CopyDirectory(
             root_dir=root_dir,
             src=src,
             path="folder_in_src_to_copy",
@@ -217,16 +217,16 @@ class PythonVariableChanger(Protocol):
     .. code-block:: python
 
         from typing import assert_never
-        from pytest_typing_runner import file_changer
+        from pytest_typing_runner import file_changers
         from typing import TYPE_CHECKING
         import ast
 
         def changer(
             *,
-            node: file_changer.T_Assign,
+            node: file_changers.T_Assign,
             variable_name: str,
             values: dict[str, object]
-        ) -> file_changer.T_Assign:
+        ) -> file_changers.T_Assign:
             new_value = ... # some ast.expr object
 
             match node:
@@ -240,7 +240,7 @@ class PythonVariableChanger(Protocol):
                     assert_never(node)
 
         if TYPE_CHECKING:
-            _c: file_changer.PythonVariableChanger = changer
+            _c: file_changers.PythonVariableChanger = changer
 
     :param node: The ast assignment node that is being looked at
     :param variable_name: The name of the variable that was being assigned
@@ -259,10 +259,10 @@ class BasicPythonAssignmentChanger:
 
     .. code-block:: python
 
-        from pytest_typing_runner import file_changer
+        from pytest_typing_runner import file_changers
 
 
-        changer = file_changer.BasicPythonAssignmentChanger(
+        changer = file_changers.BasicPythonAssignmentChanger(
             root_dir=root_dir,
             path="path/to/my_code.py",
             variable_changers={"var1": ..., "var2": ...}

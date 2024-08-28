@@ -7,12 +7,12 @@ from collections.abc import Sequence
 import pytest
 from typing_extensions import assert_never
 
-from pytest_typing_runner import file_changer
+from pytest_typing_runner import file_changers
 
 
 class TestFileAppender:
     def test_it_can_return_content_with_appended_content(self, tmp_path: pathlib.Path) -> None:
-        appender = file_changer.FileAppender(
+        appender = file_changers.FileAppender(
             root_dir=tmp_path, path="somewhere/nice", extra_content="extra"
         )
 
@@ -34,13 +34,13 @@ class TestFileAppender:
         directory_two = tmp_path / "root_file_system"
         directory_two.mkdir()
 
-        appender = file_changer.FileAppender(
+        appender = file_changers.FileAppender(
             root_dir=directory_one,
             path=str((directory_two / "fstab").resolve()),
             extra_content="something dangerous",
         )
 
-        with pytest.raises(file_changer.LocationOutOfBounds) as e:
+        with pytest.raises(file_changers.LocationOutOfBounds) as e:
             appender.after_append()
 
         assert e.value.root_dir == directory_one
@@ -49,19 +49,19 @@ class TestFileAppender:
     def test_it_can_be_told_to_complain_if_no_file_to_append_to(
         self, tmp_path: pathlib.Path
     ) -> None:
-        appender = file_changer.FileAppender(
+        appender = file_changers.FileAppender(
             root_dir=tmp_path,
             path="hello/there",
             extra_content="stuff",
         )
 
-        with pytest.raises(file_changer.LocationDoesNotExist) as e:
+        with pytest.raises(file_changers.LocationDoesNotExist) as e:
             appender.after_append(must_exist=True)
 
         assert e.value.location == tmp_path / "hello" / "there"
 
     def test_it_can_pretend_file_not_existing_is_empty_file(self, tmp_path: pathlib.Path) -> None:
-        appender = file_changer.FileAppender(
+        appender = file_changers.FileAppender(
             root_dir=tmp_path,
             path="hello/there",
             extra_content="things",
@@ -98,9 +98,9 @@ class TestCopyDirectory:
         self, root_dir: pathlib.Path, src: pathlib.Path, modify_file: FileModifier
     ) -> None:
         assert not (src / "one").exists()
-        copier = file_changer.CopyDirectory(root_dir=root_dir, src=src, path="one")
+        copier = file_changers.CopyDirectory(root_dir=root_dir, src=src, path="one")
 
-        with pytest.raises(file_changer.LocationDoesNotExist) as e:
+        with pytest.raises(file_changers.LocationDoesNotExist) as e:
             copier.do_copy(modify_file=modify_file, skip_if_destination_exists=True)
 
         assert e.value.location == src / "one"
@@ -109,9 +109,9 @@ class TestCopyDirectory:
         self, root_dir: pathlib.Path, src: pathlib.Path, modify_file: FileModifier
     ) -> None:
         (src / "one").write_text("is_a_file")
-        copier = file_changer.CopyDirectory(root_dir=root_dir, src=src, path="one")
+        copier = file_changers.CopyDirectory(root_dir=root_dir, src=src, path="one")
 
-        with pytest.raises(file_changer.LocationIsNotDirectory) as e:
+        with pytest.raises(file_changers.LocationIsNotDirectory) as e:
             copier.do_copy(modify_file=modify_file, skip_if_destination_exists=True)
 
         assert e.value.location == src / "one"
@@ -119,7 +119,7 @@ class TestCopyDirectory:
     def test_it_can_skip_if_the_destination_already_exists(
         self, root_dir: pathlib.Path, src: pathlib.Path, modify_file: FileModifier
     ) -> None:
-        copier = file_changer.CopyDirectory(root_dir=root_dir, src=src, path="one")
+        copier = file_changers.CopyDirectory(root_dir=root_dir, src=src, path="one")
 
         copy_from = src / "one"
         copy_from.mkdir()
@@ -137,7 +137,7 @@ class TestCopyDirectory:
     def test_it_can_override_the_destination_if_already_exists(
         self, root_dir: pathlib.Path, src: pathlib.Path, modify_file: FileModifier
     ) -> None:
-        copier = file_changer.CopyDirectory(root_dir=root_dir, src=src, path="wanted")
+        copier = file_changers.CopyDirectory(root_dir=root_dir, src=src, path="wanted")
 
         copy_from = src / "wanted"
         copy_from.mkdir()
@@ -159,7 +159,7 @@ class TestCopyDirectory:
     def test_it_can_be_given_an_exclude_filter(
         self, root_dir: pathlib.Path, src: pathlib.Path, modify_file: FileModifier
     ) -> None:
-        copier = file_changer.CopyDirectory(root_dir=root_dir, src=src, path="wanted")
+        copier = file_changers.CopyDirectory(root_dir=root_dir, src=src, path="wanted")
 
         copy_from = src / "wanted"
         copy_from.mkdir()
@@ -195,11 +195,11 @@ class TestCopyDirectory:
 
 class TestBasicPythonAssignmentChanger:
     def test_it_complains_if_location_is_outside_root_dir(self, tmp_path: pathlib.Path) -> None:
-        changer = file_changer.BasicPythonAssignmentChanger(
+        changer = file_changers.BasicPythonAssignmentChanger(
             root_dir=tmp_path, path="../../somewhere", variable_changers={}
         )
 
-        with pytest.raises(file_changer.LocationOutOfBounds) as e:
+        with pytest.raises(file_changers.LocationOutOfBounds) as e:
             changer.after_change(default_content="")
 
         assert e.value.location == (tmp_path / ".." / ".." / "somewhere").resolve()
@@ -215,12 +215,12 @@ class TestBasicPythonAssignmentChanger:
         called: list[tuple[str, object]] = []
 
         def looker(
-            *, node: file_changer.T_Assign, variable_name: str, values: dict[str, object]
-        ) -> file_changer.T_Assign:
+            *, node: file_changers.T_Assign, variable_name: str, values: dict[str, object]
+        ) -> file_changers.T_Assign:
             called.append((variable_name, values[variable_name]))
             return node
 
-        changer = file_changer.BasicPythonAssignmentChanger(
+        changer = file_changers.BasicPythonAssignmentChanger(
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={"ONE": looker, "TWO": looker, "THREE": looker},
@@ -246,10 +246,10 @@ class TestBasicPythonAssignmentChanger:
             def __call__(
                 self,
                 *,
-                node: file_changer.T_Assign,
+                node: file_changers.T_Assign,
                 variable_name: str,
                 values: dict[str, object],
-            ) -> file_changer.T_Assign:
+            ) -> file_changers.T_Assign:
                 match node:
                     case ast.AnnAssign(target=target, annotation=annotation, simple=simple):
                         return ast.AnnAssign(
@@ -263,7 +263,7 @@ class TestBasicPythonAssignmentChanger:
                     case _:
                         assert_never(node)
 
-        changer = file_changer.BasicPythonAssignmentChanger(
+        changer = file_changers.BasicPythonAssignmentChanger(
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={
@@ -299,14 +299,14 @@ class TestVariableFinder:
         def notifier(*, variable_name: str, value: object) -> None:
             called.append((variable_name, value))
 
-        changer = file_changer.BasicPythonAssignmentChanger(
+        changer = file_changers.BasicPythonAssignmentChanger(
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={
-                "ONE": file_changer.VariableFinder(notify=notifier),
-                "THREE": file_changer.VariableFinder(notify=notifier),
-                "FOUR": file_changer.VariableFinder(notify=notifier),
-                "FIVE": file_changer.VariableFinder(notify=notifier),
+                "ONE": file_changers.VariableFinder(notify=notifier),
+                "THREE": file_changers.VariableFinder(notify=notifier),
+                "FOUR": file_changers.VariableFinder(notify=notifier),
+                "FIVE": file_changers.VariableFinder(notify=notifier),
             },
         )
 
@@ -339,13 +339,13 @@ class TestListVariableChanger:
                 called.append((variable_name, values))
                 return [ast.Constant(i) for i in self.new_values]
 
-        changer = file_changer.BasicPythonAssignmentChanger(
+        changer = file_changers.BasicPythonAssignmentChanger(
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={
-                "ONE": file_changer.ListVariableChanger(change=Change(new_values=[1, 2])),
-                "TWO": file_changer.ListVariableChanger(change=Change(new_values=[3, 4])),
-                "THREE": file_changer.ListVariableChanger(change=Change(new_values=[5, 6])),
+                "ONE": file_changers.ListVariableChanger(change=Change(new_values=[1, 2])),
+                "TWO": file_changers.ListVariableChanger(change=Change(new_values=[3, 4])),
+                "THREE": file_changers.ListVariableChanger(change=Change(new_values=[5, 6])),
             },
         )
 

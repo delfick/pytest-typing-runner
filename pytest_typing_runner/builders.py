@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self, TypeVar
 
-from . import expectations, file_changer, notices, protocols
+from . import expectations, file_changers, notices, protocols
 
 T_CO_ScenarioFile = TypeVar(
     "T_CO_ScenarioFile", bound="ScenarioFile", default="ScenarioFile", covariant=True
@@ -71,7 +71,7 @@ class ScenarioFile:
         :returns: This scenario file instance
         """
         return self.set(
-            content=file_changer.FileAppender(
+            content=file_changers.FileAppender(
                 root_dir=self.root_dir, path=self.path, extra_content=content
             ).after_append(divider=divider, must_exist=must_exist),
         )

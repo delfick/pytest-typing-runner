@@ -16,9 +16,9 @@ relative to the root directory of the scenario, and the contents to use (or ``No
 if the file should be deleted).
 
 To add extra functionality around what kind of changes we want to make to files
-there are some helpers in ``pytest_typing_runner.file_changer`` that are used
+there are some helpers in ``pytest_typing_runner.file_changers`` that are used
 to determine what new content a file should have after a change.
 
-.. automodule:: pytest_typing_runner.file_changer
+.. automodule:: pytest_typing_runner.file_changers
    :members:
    :member-order: bysource
