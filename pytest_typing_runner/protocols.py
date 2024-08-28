@@ -849,11 +849,6 @@ class ScenarioRunner(Protocol[T_Scenario]):
         Used to add a section to the pytest report
         """
 
-    def determine_options(self) -> RunOptions[T_Scenario]:
-        """
-        Called to determine what to run the type checker with
-        """
-
     def file_modification(self, path: str, content: str | None) -> None:
         """
         Used to modify a file for the scenario and record it on the runs

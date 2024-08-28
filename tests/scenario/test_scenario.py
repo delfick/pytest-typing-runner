@@ -178,7 +178,7 @@ class TestScenarioRunner:
 
     class TestFileModification:
         def test_it_adds_to_the_runs(
-            self, runner: protocols.ScenarioRunner[protocols.Scenario]
+            self, runner: scenarios.ScenarioRunner[protocols.Scenario]
         ) -> None:
             assert not runner.runs.has_runs
 
@@ -221,7 +221,7 @@ class TestScenarioRunner:
             assert list(r5.file_modifications) == [("seven", "create"), ("two", "delete")]
 
         def test_it_doesnt_add_no_changes(
-            self, runner: protocols.ScenarioRunner[protocols.Scenario]
+            self, runner: scenarios.ScenarioRunner[protocols.Scenario]
         ) -> None:
             runner.file_modification("one", "two")
             runner.file_modification("two/more", "three")

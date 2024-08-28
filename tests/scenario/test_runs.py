@@ -257,7 +257,7 @@ class TestScenarioRun:
 
 class TestScenarioRuns:
     @pytest.fixture
-    def runner(self, tmp_path: pathlib.Path) -> protocols.ScenarioRunner[protocols.Scenario]:
+    def runner(self, tmp_path: pathlib.Path) -> scenarios.ScenarioRunner[protocols.Scenario]:
         return scenarios.ScenarioRunner[protocols.Scenario].create(
             config=stubs.StubRunnerConfig(),
             root_dir=tmp_path,
@@ -272,13 +272,13 @@ class TestScenarioRuns:
         assert isinstance(runs, scenarios.ScenarioRuns)
         assert runs.scenario is runner.scenario
 
-    def test_it_has_a_scenario(self, runner: protocols.ScenarioRunner[protocols.Scenario]) -> None:
+    def test_it_has_a_scenario(self, runner: scenarios.ScenarioRunner[protocols.Scenario]) -> None:
         options = runner.determine_options()
         runs = scenarios.ScenarioRuns(scenario=options.scenario_runner.scenario)
         assert runs.scenario is options.scenario_runner.scenario
 
     def test_it_can_be_given_runs(
-        self, runner: protocols.ScenarioRunner[protocols.Scenario]
+        self, runner: scenarios.ScenarioRunner[protocols.Scenario]
     ) -> None:
         options = runner.determine_options()
         runs = scenarios.ScenarioRuns(scenario=options.scenario_runner.scenario)
@@ -369,7 +369,7 @@ class TestScenarioRuns:
         )
 
     def test_it_prepare_file_modifications(
-        self, runner: protocols.ScenarioRunner[protocols.Scenario]
+        self, runner: scenarios.ScenarioRunner[protocols.Scenario]
     ) -> None:
         options = runner.determine_options()
         runs = scenarios.ScenarioRuns(scenario=options.scenario_runner.scenario)
