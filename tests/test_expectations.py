@@ -2,7 +2,7 @@ import dataclasses
 import pathlib
 
 import pytest
-from pytest_typing_runner_test_driver import stubs
+from pytest_typing_runner_test_driver import matchers, stubs
 
 from pytest_typing_runner import expectations, notice_changers, notices, protocols, scenarios
 
@@ -143,3 +143,76 @@ class TestExpectations:
             expected.check(notice_checker=notice_checker)
 
         assert str(e.value) == "Expected exit code from result (99) to be zero"
+
+
+class TestNormaliseNotices:
+    def test_it_makes_no_changes_if_no_multiline_messages(self, tmp_path: pathlib.Path) -> None:
+        l1 = tmp_path / "1"
+        l2 = tmp_path / "2"
+
+        program_notices = notices.ProgramNotices()
+        f1 = program_notices.generate_notices_for_location(l1)
+        f1l1 = f1.generate_notices_for_line(1)
+        n1 = f1l1.generate_notice(msg="a")
+        n2 = f1l1.generate_notice(msg="b")
+
+        f2 = program_notices.generate_notices_for_location(l2)
+        f2l4 = f2.generate_notices_for_line(4)
+        n3 = f2l4.generate_notice(msg="c", severity=notices.ErrorSeverity("arg-type"))
+        n4 = f2l4.generate_notice(msg="d")
+        f2l5 = f2.generate_notices_for_line(5)
+        n5 = f2l5.generate_notice(msg="e")
+        n6 = f2l5.generate_notice(msg="f", severity=notices.ErrorSeverity("assignment"))
+
+        assert list(expectations.normalise_notices([n1, n2, n3, n4, n5, n6])) == [
+            matchers.MatchNote(location=l1, line_number=1, msg="a"),
+            matchers.MatchNote(location=l1, line_number=1, msg="b"),
+            matchers.MatchNotice(
+                location=l2, line_number=4, severity=notices.ErrorSeverity("arg-type"), msg="c"
+            ),
+            matchers.MatchNote(location=l2, line_number=4, msg="d"),
+            matchers.MatchNotice(
+                location=l2, line_number=5, severity=notices.ErrorSeverity("assignment"), msg="f"
+            ),
+            matchers.MatchNote(location=l2, line_number=5, msg="e"),
+        ]
+
+    def test_it_splits_multiline_notices(self, tmp_path: pathlib.Path) -> None:
+        l1 = tmp_path / "1"
+        l2 = tmp_path / "2"
+
+        program_notices = notices.ProgramNotices()
+        f1 = program_notices.generate_notices_for_location(l1)
+        f1l1 = f1.generate_notices_for_line(1)
+        n1 = f1l1.generate_notice(msg="a\nb\nc")
+        n2 = f1l1.generate_notice(msg="b")
+
+        f2 = program_notices.generate_notices_for_location(l2)
+        f2l4 = f2.generate_notices_for_line(4)
+        n3 = f2l4.generate_notice(msg="c\nb\na", severity=notices.ErrorSeverity("arg-type"))
+        n4 = f2l4.generate_notice(msg="f")
+        f2l5 = f2.generate_notices_for_line(5)
+        n5 = f2l5.generate_notice(msg="g\nf")
+        n6 = f2l5.generate_notice(msg="h", severity=notices.ErrorSeverity("assignment"))
+
+        assert list(expectations.normalise_notices([n1, n2, n3, n4, n5, n6])) == [
+            matchers.MatchNote(location=l1, line_number=1, msg="a"),
+            matchers.MatchNote(location=l1, line_number=1, msg="b"),
+            matchers.MatchNote(location=l1, line_number=1, msg="c"),
+            matchers.MatchNote(location=l1, line_number=1, msg="b"),
+            matchers.MatchNotice(
+                location=l2, line_number=4, severity=notices.ErrorSeverity("arg-type"), msg="c"
+            ),
+            matchers.MatchNotice(
+                location=l2, line_number=4, severity=notices.ErrorSeverity("arg-type"), msg="b"
+            ),
+            matchers.MatchNotice(
+                location=l2, line_number=4, severity=notices.ErrorSeverity("arg-type"), msg="a"
+            ),
+            matchers.MatchNote(location=l2, line_number=4, msg="f"),
+            matchers.MatchNotice(
+                location=l2, line_number=5, severity=notices.ErrorSeverity("assignment"), msg="h"
+            ),
+            matchers.MatchNote(location=l2, line_number=5, msg="g"),
+            matchers.MatchNote(location=l2, line_number=5, msg="f"),
+        ]
