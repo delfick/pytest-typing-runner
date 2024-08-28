@@ -234,12 +234,12 @@ def _make_no_incremental_strategy() -> protocols.Strategy:
     """
 
     def choose(
-        *, scenario: protocols.T_Scenario
+        *, config: protocols.RunnerConfig, scenario: protocols.T_Scenario
     ) -> protocols.ProgramRunnerMaker[protocols.T_Scenario]:
         return MypyChoice(
             default_args=["--no-incremental"],
             do_followups=False,
-            same_process=scenario.same_process,
+            same_process=config.same_process,
         )
 
     if TYPE_CHECKING:
@@ -256,12 +256,12 @@ def _make_incremental_strategy() -> protocols.Strategy:
     """
 
     def choose(
-        *, scenario: protocols.T_Scenario
+        *, config: protocols.RunnerConfig, scenario: protocols.T_Scenario
     ) -> protocols.ProgramRunnerMaker[protocols.T_Scenario]:
         return MypyChoice(
             default_args=["--incremental"],
             do_followups=True,
-            same_process=scenario.same_process,
+            same_process=config.same_process,
         )
 
     if TYPE_CHECKING:
@@ -276,12 +276,12 @@ def _make_dmypy_strategy() -> protocols.Strategy:
     """
 
     def choose(
-        *, scenario: protocols.T_Scenario
+        *, config: protocols.RunnerConfig, scenario: protocols.T_Scenario
     ) -> protocols.ProgramRunnerMaker[protocols.T_Scenario]:
         return DaemonMypyChoice(
             default_args=["run", "--"],
             do_followups=True,
-            same_process=scenario.same_process,
+            same_process=config.same_process,
         )
 
     if TYPE_CHECKING:

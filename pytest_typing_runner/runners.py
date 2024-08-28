@@ -352,15 +352,6 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
 
     mypy_name: ClassVar[str] = "mypy.dmypy"
 
-    def __post_init__(self) -> None:
-        """
-        Make sure the scenario doesn't expect this to run in the same process
-        """
-        if self.options.scenario_runner.scenario.same_process:
-            raise ValueError(
-                "The DAEMON strategy cannot also be in run in the same pytest process"
-            )
-
     def short_display(self) -> str:
         """
         Return the parts of the command before adding args and check_paths

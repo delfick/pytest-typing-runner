@@ -13,18 +13,14 @@ from pytest_typing_runner import notices, protocols, scenarios
 
 class TestScenario:
     def test_it_has_properties(self, tmp_path: pathlib.Path) -> None:
-        scenario = scenarios.Scenario(root_dir=tmp_path, same_process=False)
+        scenario = scenarios.Scenario(root_dir=tmp_path)
         assert scenario.root_dir == tmp_path
-        assert scenario.same_process is False
         assert not scenario.expects.failure
         assert not scenario.expects.daemon_restarted
 
-    @pytest.mark.parametrize("same_process", [False, True])
-    def test_it_has_a_create_classmethod(self, same_process: bool, tmp_path: pathlib.Path) -> None:
-        config = stubs.StubRunnerConfig(same_process=same_process)
+    def test_it_has_a_create_classmethod(self, tmp_path: pathlib.Path) -> None:
+        config = stubs.StubRunnerConfig()
         scenario = scenarios.Scenario.create(config, tmp_path)
-        # same_process comes from config
-        assert scenario.same_process == same_process
 
         # root_dir comes from create method
         assert scenario.root_dir == tmp_path

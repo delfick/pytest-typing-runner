@@ -61,13 +61,10 @@ class Scenario:
     Implements :protocol:`pytest_typing_runner.protocols.Scenario`
 
     :param root_dir: The directory to place all the files in for the scenario.
-    :param same_process: Whether to run the type checker in the same process or not
     :param expects: A container of boolean expectations
     """
 
     root_dir: pathlib.Path
-    same_process: bool
-
     expects: Expects = dataclasses.field(init=False, default_factory=Expects)
 
     @classmethod
@@ -75,7 +72,7 @@ class Scenario:
         """
         A handy helper that implements :protocol:`pytest_typing_runner.protocols.ScenarioMaker`
         """
-        return cls(root_dir=root_dir, same_process=config.same_process)
+        return cls(root_dir=root_dir)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -299,7 +296,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         return cls(
             scenario=scenario,
             program_runner_maker=config.typing_strategy_maker().program_runner_chooser(
-                scenario=scenario
+                config=config, scenario=scenario
             ),
             runs=scenario_runs_maker(scenario=scenario),
             cleaners=RunCleaners(),

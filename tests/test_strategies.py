@@ -130,54 +130,46 @@ class TestDefaultStrategies:
         assert daemon_strat.program_short == "mypy"
 
         scenario = scenario_runner.scenario
-        incremental = incremental_strat.program_runner_chooser(scenario=scenario)
-        no_incremental = no_incremental_strat.program_runner_chooser(scenario=scenario)
-        daemon = daemon_strat.program_runner_chooser(scenario=scenario)
+        incremental_maker = incremental_strat.program_runner_chooser(
+            config=config, scenario=scenario
+        )
+        no_incremental_maker = no_incremental_strat.program_runner_chooser(
+            config=config, scenario=scenario
+        )
+        daemon_maker = daemon_strat.program_runner_chooser(config=config, scenario=scenario)
 
-        assert incremental.default_args == ["--incremental"]
-        assert no_incremental.default_args == ["--no-incremental"]
-        assert daemon.default_args == ["run", "--"]
+        assert incremental_maker.default_args == ["--incremental"]
+        assert no_incremental_maker.default_args == ["--no-incremental"]
+        assert daemon_maker.default_args == ["run", "--"]
 
-        assert incremental.do_followups
-        assert not no_incremental.do_followups
-        assert daemon.do_followups
+        assert incremental_maker.do_followups
+        assert not no_incremental_maker.do_followups
+        assert daemon_maker.do_followups
 
-        assert not incremental.is_daemon
-        assert not no_incremental.is_daemon
-        assert daemon.is_daemon
-
-        assert not scenario.same_process
-
-        incremental_maker = incremental_strat.program_runner_chooser(scenario=scenario)
-        no_incremental_maker = no_incremental_strat.program_runner_chooser(scenario=scenario)
-        daemon_maker = daemon_strat.program_runner_chooser(scenario=scenario)
+        assert not incremental_maker.is_daemon
+        assert not no_incremental_maker.is_daemon
+        assert daemon_maker.is_daemon
 
         assert isinstance(incremental_maker(options=options), runners.ExternalMypyRunner)
         assert isinstance(no_incremental_maker(options=options), runners.ExternalMypyRunner)
         assert isinstance(daemon_maker(options=options), runners.ExternalDaemonMypyRunner)
 
-        scenario_same_process = dataclasses.replace(scenario, same_process=True)
-        options_same_process = dataclasses.replace(
-            options,
-            scenario_runner=dataclasses.replace(scenario_runner, scenario=scenario_same_process),
-        )
+        config_same_process = dataclasses.replace(config, same_process=True)
 
         incremental_maker = incremental_strat.program_runner_chooser(
-            scenario=scenario_same_process
+            config=config_same_process, scenario=scenario
         )
         no_incremental_maker = no_incremental_strat.program_runner_chooser(
-            scenario=scenario_same_process
+            config=config_same_process, scenario=scenario
         )
-        daemon_maker = daemon_strat.program_runner_chooser(scenario=scenario_same_process)
+        daemon_maker = daemon_strat.program_runner_chooser(
+            config=config_same_process, scenario=scenario
+        )
 
-        assert isinstance(
-            incremental_maker(options=options_same_process), runners.SameProcessMypyRunner
-        )
-        assert isinstance(
-            no_incremental_maker(options=options_same_process), runners.SameProcessMypyRunner
-        )
+        assert isinstance(incremental_maker(options=options), runners.SameProcessMypyRunner)
+        assert isinstance(no_incremental_maker(options=options), runners.SameProcessMypyRunner)
 
         with pytest.raises(ValueError) as e:
-            daemon_maker(options=options_same_process)
+            daemon_maker(options=options)
 
         assert str(e.value) == "The mypy daemon cannot be run in the same process"

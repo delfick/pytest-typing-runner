@@ -239,6 +239,12 @@ class ProgramRunnerMaker(Protocol[T_Scenario]):
         """
 
     @property
+    def same_process(self) -> bool:
+        """
+        Whether this program runner executes within this process instead of in a subprocess
+        """
+
+    @property
     def is_daemon(self) -> bool:
         """
         Whether this program runner uses a daemon
@@ -252,7 +258,9 @@ class ProgramRunnerChooser(Protocol):
     Used to choose which program runner to use
     """
 
-    def __call__(self, *, scenario: T_Scenario) -> ProgramRunnerMaker[T_Scenario]: ...
+    def __call__(
+        self, *, config: RunnerConfig, scenario: T_Scenario
+    ) -> ProgramRunnerMaker[T_Scenario]: ...
 
 
 class Strategy(Protocol):
@@ -777,12 +785,6 @@ class Scenario(Protocol):
     def expects(self) -> Expects:
         """
         Boolean expectations
-        """
-
-    @property
-    def same_process(self) -> bool:
-        """
-        Whether to run the type checker in the same process
         """
 
     @property
