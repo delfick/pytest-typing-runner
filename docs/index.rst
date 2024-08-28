@@ -6,6 +6,7 @@
    api/installation
    api/configuration
    api/scenario
+   api/builder
    api/protocols
    api/notices
    api/notice_changers
