@@ -59,11 +59,17 @@ class Expectations(Generic[protocols.T_Scenario]):
         notice_checker.check(self.expect_notices)
 
         result = notice_checker.result
-        assert result.stderr == self.expect_stderr
+        assert (
+            result.stderr == self.expect_stderr
+        ), f"Expected stderr in result ({result.stderr}) to match expectations ({self.expect_stderr})"
         if self.expect_fail:
-            assert result.exit_code != 0
+            assert (
+                result.exit_code != 0
+            ), f"Expected exit code from result ({result.exit_code}) to be non zero"
         else:
-            assert result.exit_code == 0
+            assert (
+                result.exit_code == 0
+            ), f"Expected exit code from result ({result.exit_code}) to be zero"
 
     @classmethod
     def setup_for_success(
