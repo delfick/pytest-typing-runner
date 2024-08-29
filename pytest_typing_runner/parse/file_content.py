@@ -50,6 +50,7 @@ class CommentMatch:
     is_reveal: bool = False
     is_error: bool = False
     is_note: bool = False
+    is_warning: bool = False
     is_whole_line: bool = False
 
     modify_lines: parse_protocols.ModifyParsedLineBefore | None = None
@@ -71,6 +72,7 @@ class InstructionMatch(CommentMatch):
     * ``# ^ NOTE[name] ^ some note``
     * ``# ^ ERROR(error-type) ^ some error``
     * ``# ^ ERROR(error-type)[name] ^ some error``
+    * ``# ^ WARNING[name] ^ some warning``
     """
 
     class _Instruction(enum.Enum):
@@ -78,6 +80,7 @@ class InstructionMatch(CommentMatch):
         REVEAL = "REVEAL"
         ERROR = "ERROR"
         NOTE = "NOTE"
+        WARNING = "WARNING"
 
     potential_instruction_regex: ClassVar[re.Pattern[str]] = re.compile(
         r"^\s*#\s*(\^|[a-zA-Z]+\s+\^)"
@@ -85,7 +88,7 @@ class InstructionMatch(CommentMatch):
     instruction_regex: ClassVar[re.Pattern[str]] = re.compile(
         # ^ INSTR >>
         r"^(?P<prefix_whitespace>\s*)"
-        r"#\s*\^\s*(?P<instruction>NAME|REVEAL|ERROR|NOTE)"
+        r"#\s*\^\s*(?P<instruction>NAME|REVEAL|ERROR|WARNING|NOTE)"
         # (error_type)?
         r"("
         r"\((?P<error_type>[^\)]*)\)"
@@ -142,6 +145,7 @@ class InstructionMatch(CommentMatch):
         * ERROR instructions sets ``is_error=True``
         * REVEAL instructions sets ``is_reveal=True`` and ``is_note=True``
         * NOTE instructions sets ``is_note=True``
+        * WARNING instructions sets ``is_warning=True``
         * All instructions set ``is_whole_line=True``
 
         When a REVEAL instruction is found it will modify the line such that it is
@@ -207,6 +211,14 @@ class InstructionMatch(CommentMatch):
                     is_error=True,
                     is_whole_line=True,
                     severity=notices.ErrorSeverity(error_type),
+                    msg=rest,
+                )
+            case cls._Instruction.WARNING:
+                yield cls(
+                    names=names,
+                    is_warning=True,
+                    is_whole_line=True,
+                    severity=notices.WarningSeverity(),
                     msg=rest,
                 )
             case cls._Instruction.NOTE:
@@ -279,6 +291,14 @@ class InstructionParser:
                     )
                 )
             elif match.is_error:
+                changers.append(
+                    notice_changers.AppendToLine(
+                        notices_maker=lambda line_notices: [
+                            line_notices.generate_notice(severity=match.severity, msg=match.msg)
+                        ]
+                    )
+                )
+            elif match.is_warning:
                 changers.append(
                     notice_changers.AppendToLine(
                         notices_maker=lambda line_notices: [

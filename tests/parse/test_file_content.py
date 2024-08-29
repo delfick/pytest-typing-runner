@@ -74,6 +74,27 @@ class TestInstructionMatch:
             )
         ]
 
+    def test_it_captures_warning_instructions(self) -> None:
+        assert list(parse.file_content.InstructionMatch.match("# ^ WARNING ^ hello")) == [
+            parse.file_content.InstructionMatch(
+                severity=notices.WarningSeverity(),
+                msg="hello",
+                is_warning=True,
+                is_whole_line=True,
+                names=[],
+            )
+        ]
+
+        assert list(parse.file_content.InstructionMatch.match("# ^ WARNING[one] ^ hello")) == [
+            parse.file_content.InstructionMatch(
+                severity=notices.WarningSeverity(),
+                msg="hello",
+                is_warning=True,
+                is_whole_line=True,
+                names=["one"],
+            )
+        ]
+
     def test_it_captures_reveal_instructions(self) -> None:
         class MatchModifyLines:
             def __init__(self, *, prefix_whitespace: str) -> None:
@@ -197,6 +218,12 @@ class TestInstructionParser:
                 is_error=True, is_whole_line=True, severity=notices.ErrorSeverity("arg-type")
             ),
             id="error",
+        ),
+        pytest.param(
+            parse.file_content.CommentMatch(
+                is_warning=True, is_whole_line=True, severity=notices.WarningSeverity()
+            ),
+            id="warning",
         ),
         pytest.param(
             parse.file_content.CommentMatch(is_whole_line=True, severity=notices.NoteSeverity()),
@@ -452,6 +479,39 @@ class TestInstructionParser:
                 line_number=2,
                 severity=notices.ErrorSeverity("arg-type"),
                 msg="error",
+            )
+        ]
+
+    def test_it_adds_append_changer_for_warning(self, tmp_path: pathlib.Path) -> None:
+        before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
+
+        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+            yield parse.file_content.CommentMatch(
+                severity=notices.WarningSeverity(),
+                msg="warn",
+                names=["three"],
+                is_warning=True,
+                is_whole_line=True,
+            )
+
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+
+        assert after.modify_lines is None
+        assert after.names == ["three"]
+        assert not after.real_line
+
+        assert len(after.notice_changers) == 1
+        assert isinstance(after.notice_changers[0], notice_changers.AppendToLine)
+
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2)
+        assert list(line_notices) == []
+
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            matchers.MatchNotice(
+                location=tmp_path,
+                line_number=2,
+                severity=notices.WarningSeverity(),
+                msg="warn",
             )
         ]
 

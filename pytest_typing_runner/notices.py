@@ -32,6 +32,27 @@ class NoteSeverity:
         return self.display == other_display
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class WarningSeverity:
+    """
+    Represents a "warning" severity
+
+    Implements :protocol:`pytest_typing_runner.protocols.Severity`
+    """
+
+    display: str = dataclasses.field(init=False, default="warning")
+
+    def __lt__(self, other: protocols.Severity) -> bool:
+        return self.display < other.display
+
+    def __eq__(self, o: object) -> bool:
+        other_display = getattr(o, "display", None)
+        if not isinstance(other_display, str):
+            return False
+
+        return self.display == other_display
+
+
 @dataclasses.dataclass(frozen=True)
 class ErrorSeverity:
     """

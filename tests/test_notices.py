@@ -54,6 +54,28 @@ class TestNoteSeverity:
         assert notices.NoteSeverity() != notices.ErrorSeverity("arg-type")
 
 
+class TestWarningSeverity:
+    def test_it_displays_note(self) -> None:
+        sev = notices.WarningSeverity()
+        assert sev.display == "warning"
+
+    def test_it_is_ordable(self) -> None:
+        sev_c = OtherSeverity("c")
+        sev_a = OtherSeverity("a")
+        sev_z = OtherSeverity("z")
+        sev_y = OtherSeverity("y")
+        sev_w1 = notices.WarningSeverity()
+        sev_w2 = notices.WarningSeverity()
+        original: Sequence[protocols.Severity] = [sev_c, sev_w1, sev_a, sev_z, sev_w2, sev_y]
+        assert sorted(original) == [sev_a, sev_c, sev_w1, sev_w2, sev_y, sev_z]
+
+    def test_it_can_be_compared(self) -> None:
+        assert notices.WarningSeverity() == notices.WarningSeverity()
+        assert notices.WarningSeverity() == OtherSeverity("warning")
+        assert notices.WarningSeverity() != OtherSeverity("other")
+        assert notices.WarningSeverity() != notices.ErrorSeverity("arg-type")
+
+
 class TestErrorSeverity:
     def test_it_displays_error_with_error_type(self) -> None:
         assert notices.ErrorSeverity("arg-type").display == "error[arg-type]"

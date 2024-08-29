@@ -106,6 +106,12 @@ class CommentMatch(Protocol):
         """
 
     @property
+    def is_warning(self) -> bool:
+        """
+        Whether this match adds a warning
+        """
+
+    @property
     def is_whole_line(self) -> bool:
         """
         Whether this match is for the whole line

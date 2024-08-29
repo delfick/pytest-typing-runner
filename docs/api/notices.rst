@@ -25,9 +25,11 @@ The :protocol:`pytest_typing_runner.protocols.ProgramNotice` has on it the file
 location, the line number, an optional column number, a severity, and a message.
 
 Severities are currently modelled as a :protocol:`pytest_typing_runner.protocols.Severity`
-object with two default implementations:
+object with three default implementations:
 
 .. autoclass:: pytest_typing_runner.notices.NoteSeverity
+
+.. autoclass:: pytest_typing_runner.notices.WarningSeverity
 
 .. autoclass:: pytest_typing_runner.notices.ErrorSeverity
 
