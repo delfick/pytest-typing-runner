@@ -47,8 +47,16 @@ def make_python_module(
 
     with tempfile.TemporaryDirectory() as directory:
         out = pathlib.Path(directory, "out")
-        code = pathlib.Path(directory, "code", path)
+        code_parent = pathlib.Path(directory, "code")
+        code = code_parent / path
         code.parent.mkdir(parents=True, exist_ok=True)
 
+        d = code.parent
+        while d.is_relative_to(code_parent):
+            init = d / "__init__.py"
+            if not init.exists():
+                init.write_text("")
+            d = d.parent
+
         code.write_text(make_code(out))
-        yield out, str(pathlib.Path(directory, "code"))
+        yield out, str(code_parent)

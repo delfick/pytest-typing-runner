@@ -161,19 +161,23 @@ class ExternalMypyRunner(Generic[protocols.T_Scenario]):
         """
         return " ".join(self.command)
 
+    def _combine_env(self, overrides: Mapping[str, str | None]) -> Mapping[str, str]:
+        env = dict(os.environ)
+        for k, v in overrides.items():
+            if v is None:
+                if k in env:
+                    del env[k]
+            else:
+                env[k] = v
+        return env
+
     def run(
         self, *, checker_kls: type[MypyChecker[protocols.T_Scenario]] = MypyChecker
     ) -> protocols.NoticeChecker[protocols.T_Scenario]:
         """
         Run mypy as an external process.
         """
-        env = dict(os.environ)
-        for k, v in self.options.environment_overrides.items():
-            if v is None:
-                if k in env:
-                    del env[k]
-            else:
-                env[k] = v
+        env = self._combine_env(self.options.environment_overrides)
 
         completed = subprocess.run(
             [*self.command, *self.options.args, *self.options.check_paths],
@@ -394,7 +398,11 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
         """
         self.options.scenario_runner.cleaners.add(
             f"program_runner::dmypy::{self.options.cwd}",
-            functools.partial(self._cleanup, cwd=self.options.cwd),
+            functools.partial(
+                self._cleanup,
+                cwd=self.options.cwd,
+                env=self._combine_env(self.options.environment_overrides),
+            ),
         )
         checker = super().run(checker_kls=checker_kls)
         lines = checker.result.stdout.strip().split("\n")
@@ -411,14 +419,18 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
             ),
         )
 
-    def _cleanup(self, *, cwd: pathlib.Path) -> None:
+    def _cleanup(self, *, cwd: pathlib.Path, env: Mapping[str, str]) -> None:
         """
         If dmypy is running in the cwd that was used then make sure to make it
         stop.
         """
-        completed = subprocess.run([*self.command, "status"], capture_output=True, cwd=cwd)
+        completed = subprocess.run(
+            [*self.command, "status"], capture_output=True, cwd=cwd, env=env
+        )
         if completed.returncode == 0:
-            completed = subprocess.run([*self.command, "kill"], capture_output=True, cwd=cwd)
+            completed = subprocess.run(
+                [*self.command, "kill"], capture_output=True, cwd=cwd, env=env
+            )
             assert (
                 completed.returncode == 0
             ), f"Failed to stop dmypy: {completed.returncode}\n{completed.stdout.decode()}\n{completed.stderr.decode()}"
