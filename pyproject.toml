@@ -12,6 +12,22 @@ requires-python = ">= 3.10"
 authors = [
     { name = "Stephen Moore", email = "stephen@delfick.com" },
 ]
+classifiers = [
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
+
+[project.urls]
+repository = "https://github.com/delfick/pytest-typing-runner"
+changelog = "https://pytest-typing-runner.readthedocs.io/en/latest/api/changelog.html"
+docs = "https://pytest-typing-runner.readthedocs.io"
 
 [project.entry-points.pytest_typing_runner_strategies]
 a_register = "pytest_typing_runner.strategies:register_default_strategies"
