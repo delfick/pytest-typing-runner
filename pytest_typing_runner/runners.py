@@ -342,11 +342,7 @@ class DaemonMypyChecker(MypyChecker[protocols.T_Scenario]):
             lines.pop()
 
         daemon_restarted: bool = False
-        if (
-            len(lines) > 2
-            and lines[0] == "Restarting: plugins changed"
-            and lines[1] == "Daemon stopped"
-        ):
+        if len(lines) > 2 and lines[0].startswith("Restarting") and lines[1] == "Daemon stopped":
             lines.pop(0)
             lines.pop(0)
             daemon_restarted = True
@@ -359,13 +355,13 @@ class DaemonMypyChecker(MypyChecker[protocols.T_Scenario]):
 
     def check_daemon_restarted(self, *, restarted: bool) -> None:
         if self.runner.options.scenario_runner.scenario.expects.daemon_restarted:
+            # We expected a restart, assert we did actually restart
+            assert restarted, "Expect the daemon to have restarted"
+
             # Followup run should not restart the daemon again
             self.runner.options.scenario_runner.scenario.expects.daemon_restarted = False
-
-            # We expected a restart, assert we did actually restart
-            assert restarted
         else:
-            assert not restarted
+            assert not restarted, "Did not expect the daemon to restart"
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
