@@ -199,6 +199,127 @@ class TestInstructionMatch:
             )
 
 
+class TestInlineComment:
+    def test_it_lets_through_non_inline_comments(self) -> None:
+        for code_line in [
+            "",
+            "class Foo:",
+            "one: int = 1",
+            "def my_func():",
+            "# ^ NOTE ^ blah",
+            "# type-ignore[arg-type]",
+            "# stuff and things",
+            "# N: no code before the line!",
+        ]:
+            assert list(parse.file_content.InlineCommentMatch.match(code_line)) == []
+
+    def test_it_captures_note_instructions(self) -> None:
+        assert list(parse.file_content.InlineCommentMatch.match("code # N: hello")) == [
+            parse.file_content.InlineCommentMatch(
+                severity=notices.NoteSeverity(),
+                msg="hello",
+                is_note=True,
+                is_whole_line=False,
+                names=[],
+            )
+        ]
+
+    def test_it_captures_warning_instructions(self) -> None:
+        assert list(parse.file_content.InlineCommentMatch.match("code # W: hello")) == [
+            parse.file_content.InlineCommentMatch(
+                severity=notices.WarningSeverity(),
+                msg="hello",
+                is_warning=True,
+                is_whole_line=False,
+                names=[],
+            )
+        ]
+
+    def test_it_captures_error_instructions(self) -> None:
+        assert list(
+            parse.file_content.InlineCommentMatch.match(
+                "code # E: hello  [arg-type] # E: there [one-space]"
+            )
+        ) == [
+            parse.file_content.InlineCommentMatch(
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="hello",
+                is_error=True,
+                is_whole_line=False,
+                names=[],
+            ),
+            parse.file_content.InlineCommentMatch(
+                severity=notices.ErrorSeverity("one-space"),
+                msg="there",
+                is_error=True,
+                is_whole_line=False,
+                names=[],
+            ),
+        ]
+
+    def test_allows_errors_without_error_types(self) -> None:
+        assert list(parse.file_content.InlineCommentMatch.match("code # E: hello ")) == [
+            parse.file_content.InlineCommentMatch(
+                severity=notices.ErrorSeverity(""),
+                msg="hello",
+                is_error=True,
+                is_whole_line=False,
+                names=[],
+            )
+        ]
+
+    def test_it_understands_escaped_hashes(self) -> None:
+        assert list(
+            parse.file_content.InlineCommentMatch.match(
+                r"code # N: hello \# ablasdf  [one] # E: there \#stuff  [two]"
+            )
+        ) == [
+            parse.file_content.InlineCommentMatch(
+                severity=notices.NoteSeverity(),
+                msg=r"hello \# ablasdf  [one]",
+                is_note=True,
+                is_whole_line=False,
+                names=[],
+            ),
+            parse.file_content.InlineCommentMatch(
+                severity=notices.ErrorSeverity("two"),
+                msg=r"there \#stuff",
+                is_error=True,
+                is_whole_line=False,
+                names=[],
+            ),
+        ]
+
+    def test_it_lets_other_instructions_have_error_type(self) -> None:
+        assert list(
+            parse.file_content.InlineCommentMatch.match(
+                "code # N: hello  [one] # W: there  [two] # E: wat[no-space]"
+            )
+        ) == [
+            parse.file_content.InlineCommentMatch(
+                severity=notices.NoteSeverity(),
+                msg="hello  [one]",
+                is_note=True,
+                is_whole_line=False,
+                names=[],
+            ),
+            parse.file_content.InlineCommentMatch(
+                severity=notices.WarningSeverity(),
+                msg="there  [two]",
+                is_warning=True,
+                is_whole_line=False,
+                names=[],
+            ),
+            parse.file_content.InlineCommentMatch(
+                severity=notices.ErrorSeverity(""),
+                msg="wat[no-space]",
+                is_error=True,
+                is_whole_line=False,
+                names=[],
+            ),
+        ]
+
+
 class TestInstructionParser:
     example_comment_matches: ClassVar[Sequence[object]] = (
         pytest.param(
@@ -1193,6 +1314,300 @@ class TestFileContent:
                 *notices_at_11,
                 *notices_at_20,
                 *notices_at_25,
+            ]
+
+        replaced, parsed = parser(original, into=notices.FileNotices(location=location))
+        assert replaced == transformed
+        assertExpected(parsed)
+
+        # And can run again with no further changes
+        replaced, parsed = parser(replaced, into=parsed)
+        assert replaced == transformed
+        assertExpected(parsed)
+
+    def test_it_can_parse_inline_comments(
+        self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
+    ) -> None:
+        original = _without_line_numbers("""
+        01: a: int = 1
+        02: model: type[Leader] = Follow1 
+        03: reveal_type(model) # N: Revealed type is "one" # E: an error  [arg-type] # E: more  [arg-type] # E: another  [assignment]
+        04: 
+        05: a: int = "asdf" # E: other  [assignment]
+        06: reveal_type(a) # N: Revealed type is "stuff" # N: one # N: two # N: three # E: another  [assignment] # N: four
+        07:
+        08: def other() -> None:
+        09:     return 1 # E: asdf  [var-annotated]
+        10:
+        11: if True:
+        12:     reveal_type(found) # E: hi  [arg-type] # N: Revealed type is "asdf" # N: Revealed type is "asdf2" # E: hi  [arg-type]
+        """)
+
+        path = "fle.py"
+        location = tmp_path / path
+
+        def assertExpected(file_notices: protocols.FileNotices) -> None:
+            assert list(file_notices.known_line_numbers()) == [3, 5, 6, 9, 12]
+            assert file_notices.known_names == {}
+
+            notices_at_3 = [
+                matchers.MatchNote(location=location, line_number=3, msg='Revealed type is "one"'),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=3,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="an error",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=3,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="more",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=3,
+                    severity=notices.ErrorSeverity("assignment"),
+                    msg="another",
+                ),
+            ]
+            notices_at_5 = [
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=5,
+                    severity=notices.ErrorSeverity("assignment"),
+                    msg="other",
+                )
+            ]
+            notices_at_6 = [
+                matchers.MatchNote(
+                    location=location, line_number=6, msg='Revealed type is "stuff"'
+                ),
+                matchers.MatchNote(
+                    location=location,
+                    line_number=6,
+                    msg="one\ntwo\nthree",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=6,
+                    severity=notices.ErrorSeverity("assignment"),
+                    msg="another",
+                ),
+                matchers.MatchNote(
+                    location=location,
+                    line_number=6,
+                    msg="four",
+                ),
+            ]
+            notices_at_9 = [
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=9,
+                    severity=notices.ErrorSeverity("var-annotated"),
+                    msg="asdf",
+                ),
+            ]
+            notices_at_12 = [
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=12,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="hi",
+                ),
+                matchers.MatchNote(
+                    location=location, line_number=12, msg='Revealed type is "asdf"'
+                ),
+                matchers.MatchNote(
+                    location=location, line_number=12, msg='Revealed type is "asdf2"'
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=12,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="hi",
+                ),
+            ]
+
+            assert list(file_notices.notices_at_line(3) or []) == notices_at_3
+            assert list(file_notices.notices_at_line(5) or []) == notices_at_5
+            assert list(file_notices.notices_at_line(6) or []) == notices_at_6
+            assert list(file_notices.notices_at_line(9) or []) == notices_at_9
+            assert list(file_notices.notices_at_line(12) or []) == notices_at_12
+            assert list(file_notices) == [
+                *notices_at_3,
+                *notices_at_5,
+                *notices_at_6,
+                *notices_at_9,
+                *notices_at_12,
+            ]
+
+        replaced, parsed = parser(original, into=notices.FileNotices(location=location))
+        assert replaced == original
+        assertExpected(parsed)
+
+        # And can run again with no further changes
+        replaced, parsed = parser(replaced, into=parsed)
+        assert replaced == original
+        assertExpected(parsed)
+
+    def test_it_can_parse_inline_comments_combined_with_instruction_comments(
+        self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
+    ) -> None:
+        original = _without_line_numbers("""
+        01: a: int = 1
+        02: model: type[Leader] = Follow1 
+        03: reveal_type(model) # N: Revealed type is "one" # E: an error  [arg-type] # E: more  [arg-type] # E: another  [assignment]
+        04: 
+        05: a: int = "asdf" # E: other  [assignment]
+        06: reveal_type(a) # N: Revealed type is "stuff" # N: one # N: two # N: three # E: another  [assignment] # N: four
+        07:
+        08: def other() -> None:
+        09:     a: int = str # E: nope  [assignment]
+        10:     # ^ REVEAL[a] ^ builtins.int
+        11:     return 1 # E: asdf  [var-annotated]
+        12:
+        13: if True:
+        14:     reveal_type(found) # E: hi  [arg-type] # N: Revealed type is "asdf" # N: Revealed type is "asdf2" # E: hi  [arg-type]
+        15:     # ^ NOTE ^ amaze
+        """)
+
+        path = "fle.py"
+        location = tmp_path / path
+
+        transformed = _without_line_numbers("""
+        01: a: int = 1
+        02: model: type[Leader] = Follow1 
+        03: reveal_type(model) # N: Revealed type is "one" # E: an error  [arg-type] # E: more  [arg-type] # E: another  [assignment]
+        04: 
+        05: a: int = "asdf" # E: other  [assignment]
+        06: reveal_type(a) # N: Revealed type is "stuff" # N: one # N: two # N: three # E: another  [assignment] # N: four
+        07:
+        08: def other() -> None:
+        09:     a: int = str # E: nope  [assignment]
+        10:     reveal_type(a)
+        11:     # ^ REVEAL[a] ^ builtins.int
+        12:     return 1 # E: asdf  [var-annotated]
+        13:
+        14: if True:
+        15:     reveal_type(found) # E: hi  [arg-type] # N: Revealed type is "asdf" # N: Revealed type is "asdf2" # E: hi  [arg-type]
+        16:     # ^ NOTE ^ amaze
+        """)
+
+        def assertExpected(file_notices: protocols.FileNotices) -> None:
+            assert list(file_notices.known_line_numbers()) == [3, 5, 6, 9, 10, 12, 15]
+            assert file_notices.known_names == {"a": 10}
+
+            notices_at_3 = [
+                matchers.MatchNote(location=location, line_number=3, msg='Revealed type is "one"'),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=3,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="an error",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=3,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="more",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=3,
+                    severity=notices.ErrorSeverity("assignment"),
+                    msg="another",
+                ),
+            ]
+            notices_at_5 = [
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=5,
+                    severity=notices.ErrorSeverity("assignment"),
+                    msg="other",
+                )
+            ]
+            notices_at_6 = [
+                matchers.MatchNote(
+                    location=location, line_number=6, msg='Revealed type is "stuff"'
+                ),
+                matchers.MatchNote(
+                    location=location,
+                    line_number=6,
+                    msg="one\ntwo\nthree",
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=6,
+                    severity=notices.ErrorSeverity("assignment"),
+                    msg="another",
+                ),
+                matchers.MatchNote(
+                    location=location,
+                    line_number=6,
+                    msg="four",
+                ),
+            ]
+            notices_at_9 = [
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=9,
+                    msg="nope",
+                    severity=notices.ErrorSeverity("assignment"),
+                ),
+            ]
+            notices_at_10 = [
+                matchers.MatchNote(
+                    location=location,
+                    line_number=10,
+                    msg=notices.ProgramNotice.reveal_msg("builtins.int"),
+                ),
+            ]
+            notices_at_12 = [
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=12,
+                    severity=notices.ErrorSeverity("var-annotated"),
+                    msg="asdf",
+                ),
+            ]
+            notices_at_15 = [
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=15,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="hi",
+                ),
+                matchers.MatchNote(
+                    location=location, line_number=15, msg='Revealed type is "asdf"'
+                ),
+                matchers.MatchNote(
+                    location=location, line_number=15, msg='Revealed type is "asdf2"'
+                ),
+                matchers.MatchNotice(
+                    location=location,
+                    line_number=15,
+                    severity=notices.ErrorSeverity("arg-type"),
+                    msg="hi",
+                ),
+                matchers.MatchNote(location=location, line_number=15, msg="amaze"),
+            ]
+
+            assert list(file_notices.notices_at_line(3) or []) == notices_at_3
+            assert list(file_notices.notices_at_line(5) or []) == notices_at_5
+            assert list(file_notices.notices_at_line(6) or []) == notices_at_6
+            assert list(file_notices.notices_at_line(9) or []) == notices_at_9
+            assert list(file_notices.notices_at_line(10) or []) == notices_at_10
+            assert list(file_notices.notices_at_line(12) or []) == notices_at_12
+            assert list(file_notices.notices_at_line(15) or []) == notices_at_15
+            assert list(file_notices) == [
+                *notices_at_3,
+                *notices_at_5,
+                *notices_at_6,
+                *notices_at_9,
+                *notices_at_10,
+                *notices_at_12,
+                *notices_at_15,
             ]
 
         replaced, parsed = parser(original, into=notices.FileNotices(location=location))

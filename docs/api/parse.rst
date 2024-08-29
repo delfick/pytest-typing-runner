@@ -21,6 +21,28 @@ that all the line numbers suddenly change.
 To make this easier, the plugin provides the ability to parse a file to find
 extra comments that indicate where notices are expected.
 
+To make this happen requires doing something like the following:
+
+.. code-block:: python
+
+    from pytest_typing_runner import parse, protocols
+
+    file_notices: protocols.FileNotices = ...
+    original: str = ...
+
+    transformed, file_notices = parse.FileContent().parse(original, into=file_notices)
+
+The idea being that when creating the files, the ``transformed`` is used to write
+to the file, and when creating expectations, the ``file_notices`` are used to
+say what notices are expected. And raise an error if the second parse creates
+more transformations.
+
+There are two forms this can take (both active in the default ``FileParser``)
+as follows:
+
+Per line instructions
++++++++++++++++++++++
+
 For example:
 
 .. code-block:: python
@@ -53,8 +75,8 @@ For example:
     26:     # ^ REVEAL ^ asdf2
     27:     # ^ ERROR(arg-type)[other] ^ hi
 
-In this example, we are using ``NAME``, ``ERROR``, ``REVEAL`` and ``NOTE``
-instructions.
+In this example, we are using ``NAME``, ``ERROR``, ``WARNING``, ``REVEAL``
+and ``NOTE`` instructions.
 
 These are of the form:
 
@@ -130,22 +152,57 @@ And the following notices are expected:
     25: severity=note:: Revealed type is "asdf2"
     25: severity=error[arg-type]:: hi
 
-To make this happen requires doing something like the following:
+Mypy stubtest style
++++++++++++++++++++
+
+For example:
 
 .. code-block:: python
 
-    from pytest_typing_runner import parse, protocols
+    01: a: int = 1
+    02: model: type[Leader] = Follow1 
+    03: reveal_type(model) # N: Revealed type is "one" # E: an error  [arg-type] # E: more  [arg-type] # E: another  [assignment]
+    04: 
+    05: a: int = "asdf" # E: other  [assignment]
+    06: reveal_type(a) # N: Revealed type is "stuff" # N: one # N: two # N: three # E: another  [assignment] # N: four
+    07:
+    08: def other() -> None:
+    09:     return 1 # E: asdf  [var-annotated]
+    10:
+    11: if True:
+    12:     reveal_type(found) # E: hi  [arg-type] # N: Revealed type is "asdf" # N: Revealed type is "asdf2" # E: hi  [arg-type]
 
-    
-    file_notices: protocols.FileNotices = ...
-    original: str = ...
+Comments found on lines with preceding code will be split by un-escaped hashes
+and be interpreted as a command if starts with ``# N:``, ``# E:`` or ``# W:``
+In this example, we are using ``NAME``, ``ERROR``, ``REVEAL`` and ``NOTE``
 
-    transformed, file_notices = parse.FileContent().parse(original, into=file_notices)
+An optional column number may also be provided after the action. For example
+``# E:20``.
 
-The idea being that when creating the files, the ``transformed`` is used to write
-to the file, and when creating expectations, the ``file_notices`` are used to
-say what notices are expected. And raise an error if the second parse creates
-more transformations.
+The rest of the comment till the next un-escaped hash will be considered the
+message for the notice. The ``E`` instruction will also look for the
+``[error-type]`` at the end of the message.
+
+And the following notices are expected:
+
+.. code-block::
+
+    03: severity=note:: Revealed type is "wat"
+    03: severity=error[arg-type]:: an error
+    03: severity=error[arg-type]:: more
+    03: severity=error[assignment]:: another
+    05: severity=error[assignment]:: other
+    06: severity=note:: Revealed type is "stuff"
+    06: severity=note:: one
+    06: severity=note:: two
+    06: severity=note:: three
+    06: severity=error[assignment]:: another
+    06: severity=note:: four
+    09: severity=error[var-annotated]:: asdf
+    12: severity=error[arg-type]:: hi
+    12: severity=note:: Revealed type is "asdf"
+    12: severity=note:: Revealed type is "asdf2"
+    12: severity=error[arg-type]:: hi
 
 API for parsing input content
 -----------------------------
