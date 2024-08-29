@@ -5,7 +5,14 @@ import textwrap
 import pytest
 from pytest_typing_runner_test_driver import matchers, stubs
 
-from pytest_typing_runner import expectations, notice_changers, notices, protocols, scenarios
+from pytest_typing_runner import (
+    expectations,
+    notice_changers,
+    notices,
+    protocols,
+    runners,
+    scenarios,
+)
 
 
 class TestExpectations:
@@ -35,7 +42,7 @@ class TestExpectations:
             scenario_maker=scenarios.Scenario.create,
             scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         program_runner = options.make_program_runner(options=options)
 
         called: list[object] = []
@@ -74,7 +81,7 @@ class TestExpectations:
             scenario_maker=scenarios.Scenario.create,
             scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         program_runner = options.make_program_runner(options=options)
 
         notice_checker = stubs.StubNoticeChecker(
@@ -101,7 +108,7 @@ class TestExpectations:
             scenario_maker=scenarios.Scenario.create,
             scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         program_runner = options.make_program_runner(options=options)
 
         notice_checker = stubs.StubNoticeChecker(
@@ -128,7 +135,7 @@ class TestExpectations:
             scenario_maker=scenarios.Scenario.create,
             scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         program_runner = options.make_program_runner(options=options)
 
         notice_checker = stubs.StubNoticeChecker(

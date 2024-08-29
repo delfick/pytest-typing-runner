@@ -4,7 +4,7 @@ import textwrap
 import pytest
 from pytest_typing_runner_test_driver import stubs
 
-from pytest_typing_runner import protocols, scenarios
+from pytest_typing_runner import protocols, runners, scenarios
 
 
 class TestRunCleaners:
@@ -77,7 +77,7 @@ class TestScenarioRun:
             scenario_maker=scenarios.Scenario.create,
             scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
-        return scenario_runner.determine_options()
+        return runners.RunOptions.create(scenario_runner)
 
     def test_it_has_attributes(self, options: protocols.RunOptions[protocols.Scenario]) -> None:
         notice_checker = options.make_program_runner(options=options).run()
@@ -273,20 +273,20 @@ class TestScenarioRuns:
         assert runs.scenario is runner.scenario
 
     def test_it_has_a_scenario(self, runner: scenarios.ScenarioRunner[protocols.Scenario]) -> None:
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         runs = scenarios.ScenarioRuns(scenario=options.scenario_runner.scenario)
         assert runs.scenario is options.scenario_runner.scenario
 
     def test_it_can_be_given_runs(
         self, runner: scenarios.ScenarioRunner[protocols.Scenario]
     ) -> None:
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         runs = scenarios.ScenarioRuns(scenario=options.scenario_runner.scenario)
         assert not runs.has_runs
 
         assert "\n".join(runs.for_report()) == ""
 
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         notice_checker = options.make_program_runner(options=options).run()
         runs.add_run(checker=notice_checker, expectation_error=None)
         assert runs.has_runs
@@ -303,7 +303,7 @@ class TestScenarioRuns:
                 """).strip()
         )
 
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         notice_checker = options.make_program_runner(options=options).run()
         runs.add_run(checker=notice_checker, expectation_error=None)
         assert runs.has_runs
@@ -325,7 +325,7 @@ class TestScenarioRuns:
                 """).strip()
         )
 
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         options.args.append("one")
         options.check_paths.append("two")
         notice_checker = stubs.StubNoticeChecker(
@@ -371,13 +371,13 @@ class TestScenarioRuns:
     def test_it_prepare_file_modifications(
         self, runner: scenarios.ScenarioRunner[protocols.Scenario]
     ) -> None:
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         runs = scenarios.ScenarioRuns(scenario=options.scenario_runner.scenario)
         assert not runs.has_runs
 
         assert "\n".join(runs.for_report()) == ""
 
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         runs.add_file_modification("some/path", "create")
         runs.add_file_modification("some/other/path", "change")
         notice_checker = options.make_program_runner(options=options).run()
@@ -398,7 +398,7 @@ class TestScenarioRuns:
                 """).strip()
         )
 
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         notice_checker = options.make_program_runner(options=options).run()
         runs.add_run(checker=notice_checker, expectation_error=None)
         assert runs.has_runs
@@ -422,7 +422,7 @@ class TestScenarioRuns:
                 """).strip()
         )
 
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         options.args.append("one")
         notice_checker = options.make_program_runner(options=options).run()
 

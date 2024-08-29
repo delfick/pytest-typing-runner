@@ -363,8 +363,13 @@ class TestUsingBuilder:
     def typing_scenario_maker(self) -> protocols.ScenarioMaker[Scenario]:
         return self.Scenario.create
 
-    class Builder(builders.ScenarioBuilder[Scenario, builders.ScenarioFile]):
+    @dataclasses.dataclass(frozen=True, kw_only=True)
+    class ScenarioRunner(scenarios.ScenarioRunner[Scenario]):
         pass
+
+    @pytest.fixture
+    def typing_scenario_runner_maker(self) -> protocols.ScenarioRunnerMaker[Scenario]:
+        return self.ScenarioRunner.create
 
     @dataclasses.dataclass(frozen=True, kw_only=True)
     class ProgramRunner(stubs.StubProgramRunner[Scenario]):
@@ -413,19 +418,16 @@ class TestUsingBuilder:
         def short_display(self) -> str:
             return "stubrunner"
 
-    @dataclasses.dataclass(frozen=True, kw_only=True)
-    class ScenarioRunner(scenarios.ScenarioRunner[Scenario]):
-        def determine_options(self) -> protocols.RunOptions[TestUsingBuilder.Scenario]:
-            options = super().determine_options()
+    class Builder(builders.ScenarioBuilder[Scenario, builders.ScenarioFile]):
+        def modify_options(
+            self, options: protocols.RunOptions[TestUsingBuilder.Scenario], /
+        ) -> protocols.RunOptions[TestUsingBuilder.Scenario]:
+            options = super().modify_options(options)
             return options.clone(
-                make_program_runner=stubs.StubProgramRunnerMaker[TestUsingBuilder.Scenario](
+                make_program_runner=stubs.StubProgramRunnerMaker(
                     runner_kls=TestUsingBuilder.ProgramRunner
                 )
             )
-
-    @pytest.fixture
-    def typing_scenario_runner_maker(self) -> protocols.ScenarioRunnerMaker[Scenario]:
-        return self.ScenarioRunner.create
 
     @pytest.fixture
     def builder(self, typing_scenario_runner: ScenarioRunner) -> Builder:

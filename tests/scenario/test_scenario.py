@@ -8,7 +8,7 @@ import pytest
 from pytest_typing_runner_test_driver import stubs
 from typing_extensions import NotRequired
 
-from pytest_typing_runner import notices, protocols, scenarios
+from pytest_typing_runner import notices, protocols, runners, scenarios
 
 
 class TestScenario:
@@ -77,11 +77,11 @@ class TestScenarioRunner:
     def test_it_can_add_to_pytest_report(
         self, runner: scenarios.ScenarioRunner[protocols.Scenario]
     ) -> None:
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         notice_checker = options.make_program_runner(options=options).run()
         runner.runs.add_run(checker=notice_checker, expectation_error=None)
 
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         notice_checker = options.make_program_runner(options=options).run()
         runner.runs.add_run(checker=notice_checker, expectation_error=None)
 
@@ -133,38 +133,11 @@ class TestScenarioRunner:
             cleaners=scenarios.RunCleaners(),
         )
 
-        options = runner.determine_options()
+        options = runners.RunOptions.create(runner)
         assert options.make_program_runner is make_program_runner
         assert called == []
         checker = runner.execute_static_checking(options=options)
         assert called == [("make", options), ("run", checker)]
-
-    def test_it_can_make_run_options(self, tmp_path: pathlib.Path) -> None:
-        config = stubs.StubRunnerConfig()
-        make_program_runner = stubs.StubProgramRunnerMaker[protocols.Scenario](
-            default_args=["one", "two"], do_followups=False
-        )
-        scenario: protocols.Scenario = scenarios.Scenario.create(config, tmp_path)
-        runner = scenarios.ScenarioRunner(
-            scenario=scenario,
-            default_program_runner_maker=make_program_runner,
-            runs=scenarios.ScenarioRuns(scenario=scenario),
-            cleaners=scenarios.RunCleaners(),
-        )
-
-        options = runner.determine_options()
-        assert options.scenario_runner is runner
-        assert options.make_program_runner is make_program_runner
-        assert options.cwd == scenario.root_dir
-        assert options.check_paths == ["."]
-        assert options.args == ["one", "two"]
-        assert options.do_followup is False
-        assert options.environment_overrides == {}
-
-        # And make sure args is a copy
-        options.args.append("three")
-        assert options.args == ["one", "two", "three"]
-        assert make_program_runner.default_args == ["one", "two"]
 
     def test_it_can_generate_program_notices(
         self, runner: protocols.ScenarioRunner[protocols.Scenario]
@@ -177,19 +150,19 @@ class TestScenarioRunner:
         ) -> None:
             assert not runner.runs.has_runs
 
-            options = runner.determine_options()
+            options = runners.RunOptions.create(runner)
             notice_checker = options.make_program_runner(options=options).run()
             r1 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r1.file_modifications) == []
 
-            options = runner.determine_options()
+            options = runners.RunOptions.create(runner)
             notice_checker = options.make_program_runner(options=options).run()
             r2 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r2.file_modifications) == []
 
             runner.file_modification("one", "two")
             runner.file_modification("two/more", "three")
-            options = runner.determine_options()
+            options = runners.RunOptions.create(runner)
             notice_checker = options.make_program_runner(options=options).run()
             r3 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r3.file_modifications) == [("one", "create"), ("two/more", "create")]
@@ -198,7 +171,7 @@ class TestScenarioRunner:
             runner.file_modification("ghost", None)
             runner.file_modification("two/more", "four")
             runner.file_modification("five", "six")
-            options = runner.determine_options()
+            options = runners.RunOptions.create(runner)
             notice_checker = options.make_program_runner(options=options).run()
             r4 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r4.file_modifications) == [
@@ -210,7 +183,7 @@ class TestScenarioRunner:
 
             runner.file_modification("seven", "blah")
             runner.file_modification("two", None)
-            options = runner.determine_options()
+            options = runners.RunOptions.create(runner)
             notice_checker = options.make_program_runner(options=options).run()
             r5 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r5.file_modifications) == [("seven", "create"), ("two", "delete")]
@@ -220,14 +193,14 @@ class TestScenarioRunner:
         ) -> None:
             runner.file_modification("one", "two")
             runner.file_modification("two/more", "three")
-            options = runner.determine_options()
+            options = runners.RunOptions.create(runner)
             notice_checker = options.make_program_runner(options=options).run()
             r1 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r1.file_modifications) == [("one", "create"), ("two/more", "create")]
 
             runner.file_modification("one", "two")
             runner.file_modification("two/other", "four")
-            options = runner.determine_options()
+            options = runners.RunOptions.create(runner)
             notice_checker = options.make_program_runner(options=options).run()
             r3 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r3.file_modifications) == [("two/other", "create")]
@@ -272,11 +245,10 @@ class TestScenarioRunner:
             assert discover_root_dir() == {"seven": "blah", "five": "six"}
 
     class TestRunAndCheck:
-        def test_it_does_options_setup_run_expectations(self, tmp_path: pathlib.Path) -> None:
+        def test_it_does_setup_run_expectations(self, tmp_path: pathlib.Path) -> None:
             called: list[object] = []
 
             class Made(TypedDict):
-                options: NotRequired[protocols.RunOptions[protocols.Scenario]]
                 checker: NotRequired[protocols.NoticeChecker[protocols.Scenario]]
                 expectations: NotRequired[protocols.Expectations[protocols.Scenario]]
 
@@ -284,13 +256,6 @@ class TestScenarioRunner:
 
             @dataclasses.dataclass(frozen=True, kw_only=True)
             class Runner(scenarios.ScenarioRunner[protocols.Scenario]):
-                def determine_options(self) -> protocols.RunOptions[protocols.Scenario]:
-                    # Disable followup!
-                    options = super().determine_options().clone(do_followup=False)
-                    called.append(("determine_options", options))
-                    made["options"] = options
-                    return options
-
                 def execute_static_checking(
                     self, options: protocols.RunOptions[protocols.Scenario]
                 ) -> protocols.NoticeChecker[protocols.Scenario]:
@@ -329,11 +294,11 @@ class TestScenarioRunner:
             )
             assert not runner.runs.has_runs
 
-            runner.run_and_check(setup_expectations)
+            options = runners.RunOptions.create(runner, do_followup=False)
+            runner.run_and_check(setup_expectations=setup_expectations, options=options)
             assert called == [
-                ("determine_options", made["options"]),
-                ("setup", made["options"]),
-                ("execute", made["options"], made["checker"]),
+                ("setup", options),
+                ("execute", options, made["checker"]),
                 ("make_expectations", made["expectations"]),
                 ("check", made["checker"], made["expectations"]),
             ]
@@ -357,7 +322,6 @@ class TestScenarioRunner:
             called: list[object] = []
 
             class Made(TypedDict):
-                options: NotRequired[protocols.RunOptions[protocols.Scenario]]
                 checker1: NotRequired[protocols.NoticeChecker[protocols.Scenario]]
                 checker2: NotRequired[protocols.NoticeChecker[protocols.Scenario]]
                 expectations: NotRequired[protocols.Expectations[protocols.Scenario]]
@@ -366,14 +330,6 @@ class TestScenarioRunner:
 
             @dataclasses.dataclass(frozen=True, kw_only=True)
             class Runner(scenarios.ScenarioRunner[protocols.Scenario]):
-                def determine_options(self) -> protocols.RunOptions[protocols.Scenario]:
-                    # Enable followup!
-                    options = super().determine_options().clone(do_followup=True)
-                    called.append(("determine_options", options))
-                    assert "options" not in made
-                    made["options"] = options
-                    return options
-
                 def execute_static_checking(
                     self, options: protocols.RunOptions[protocols.Scenario]
                 ) -> protocols.NoticeChecker[protocols.Scenario]:
@@ -425,14 +381,14 @@ class TestScenarioRunner:
             )
             assert not runner.runs.has_runs
 
-            runner.run_and_check(setup_expectations)
+            options = runners.RunOptions.create(runner)
+            runner.run_and_check(setup_expectations=setup_expectations, options=options)
             assert called == [
-                ("determine_options", made["options"]),
-                ("setup", made["options"]),
-                ("execute", made["options"], made["checker1"]),
+                ("setup", options),
+                ("execute", options, made["checker1"]),
                 ("make_expectations", made["expectations"]),
                 ("check", made["checker1"], made["expectations"]),
-                ("execute", made["options"], made["checker2"]),
+                ("execute", options, made["checker2"]),
                 ("check", made["checker2"], made["expectations"]),
             ]
 
@@ -477,8 +433,9 @@ class TestScenarioRunner:
 
             assert not runner.runs.has_runs
 
+            options = runners.RunOptions.create(runner)
             with pytest.raises(ComputerSaysNo) as e:
-                runner.run_and_check(setup_expectations)
+                runner.run_and_check(setup_expectations=setup_expectations, options=options)
             assert e.value is error
 
             assert runner.runs.has_runs

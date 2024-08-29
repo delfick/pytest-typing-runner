@@ -105,7 +105,7 @@ class TestDefaultStrategies:
             scenario_maker=scenarios.Scenario.create,
             scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
-        options = scenario_runner.determine_options()
+        options = runners.RunOptions.create(scenario_runner)
 
         registry = strategies.StrategyRegistry()
         strategies.register_default_strategies(registry)

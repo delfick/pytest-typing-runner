@@ -61,35 +61,29 @@ class RunOptions(Generic[protocols.T_Scenario]):
         cls,
         scenario_runner: protocols.ScenarioRunner[protocols.T_Scenario],
         *,
-        cwd: pathlib.Path | None = None,
-        do_followup: bool | None = None,
         program_runner_maker: protocols.ProgramRunnerMaker[protocols.T_Scenario] | None = None,
-        modify_options: protocols.RunOptionsModify | None = None,
+        modify_options: Sequence[protocols.RunOptionsModify[protocols.T_Scenario]] | None = None,
+        **kwargs: Unpack[protocols.RunOptionsCloneArgs],
     ) -> protocols.RunOptions[protocols.T_Scenario]:
         """
         Used by ``run_and_check`` to determine run options.
         """
-        if cwd is None:
-            cwd = scenario_runner.scenario.root_dir
-
         if program_runner_maker is None:
             program_runner_maker = scenario_runner.default_program_runner_maker
 
-        if do_followup is None:
-            do_followup = program_runner_maker.do_followups
-
         options: protocols.RunOptions[protocols.T_Scenario] = cls(
-            cwd=cwd,
             scenario_runner=scenario_runner,
             make_program_runner=program_runner_maker,
-            do_followup=do_followup,
-            check_paths=["."],
-            environment_overrides={},
-            args=list(program_runner_maker.default_args),
+            cwd=kwargs.get("cwd", scenario_runner.scenario.root_dir),
+            args=kwargs.get("args", list(program_runner_maker.default_args)),
+            do_followup=kwargs.get("do_followup", program_runner_maker.do_followups),
+            check_paths=kwargs.get("check_paths", ["."]),
+            environment_overrides=kwargs.get("environment_overrides", {}),
         )
 
         if modify_options is not None:
-            options = modify_options(options)
+            for modify in modify_options:
+                options = modify(options)
 
         return options
 

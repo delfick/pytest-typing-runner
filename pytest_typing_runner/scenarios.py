@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self
 
-from . import notices, protocols, runners
+from . import notices, protocols
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -382,9 +382,9 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
 
     def run_and_check(
         self,
-        setup_expectations: protocols.ExpectationsSetup[protocols.T_Scenario],
         *,
-        _options: protocols.RunOptions[protocols.T_Scenario] | None = None,
+        options: protocols.RunOptions[protocols.T_Scenario],
+        setup_expectations: protocols.ExpectationsSetup[protocols.T_Scenario],
     ) -> None:
         """
         Used to run the type checker followed by checking and recording the result.
@@ -399,8 +399,6 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
 
         .. note:: Running the type checker is done by calling the implementation
             of ``execute_static_checking`` on this scenario runner instance.
-            And the run options is found by calling ``determine_options`` on
-            this instance.
 
         If ``options.do_followup`` is ``True`` and it's the first run for this
         scenario, and there was no error when checking the result, then
@@ -413,11 +411,6 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
             Used to do setup before running the type checker and how to determine
             what result is expected from the type checker
         """
-        if _options is not None:
-            options = _options
-        else:
-            options = self.determine_options()
-
         make_expectations = setup_expectations(options=options)
         checker = self.execute_static_checking(options=options)
         expectations = make_expectations()
@@ -434,13 +427,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
             repeat_expectations: protocols.ExpectationsSetup[protocols.T_Scenario] = (
                 lambda options: lambda: expectations
             )
-            self.run_and_check(repeat_expectations, _options=options)
-
-    def determine_options(self) -> protocols.RunOptions[protocols.T_Scenario]:
-        """
-        Used by ``run_and_check`` to determine run options.
-        """
-        return runners.RunOptions.create(self)
+            self.run_and_check(setup_expectations=repeat_expectations, options=options)
 
     def normalise_program_runner_notice(
         self,

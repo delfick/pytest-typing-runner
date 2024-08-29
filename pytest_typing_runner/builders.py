@@ -1,12 +1,12 @@
 import dataclasses
 import functools
 import pathlib
-from collections.abc import Callable, MutableMapping
+from collections.abc import Callable, MutableMapping, Sequence
 from typing import TYPE_CHECKING, Generic, cast
 
-from typing_extensions import Self, TypeVar
+from typing_extensions import Self, TypeVar, Unpack
 
-from . import expectations, file_changers, notices, protocols
+from . import expectations, file_changers, notices, protocols, runners
 
 T_CO_ScenarioFile = TypeVar(
     "T_CO_ScenarioFile", bound="ScenarioFile", default="ScenarioFile", covariant=True
@@ -201,6 +201,25 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
         init=False, default_factory=dict
     )
 
+    _options_modify: MutableMapping[None, protocols.RunOptionsModify[protocols.T_Scenario]] = (
+        dataclasses.field(init=False, default_factory=dict)
+    )
+
+    def set_options_modify(
+        self, modify: protocols.RunOptionsModify[protocols.T_Scenario], /
+    ) -> None:
+        """
+        Set default options modify that is used on ``run_and_check``
+        """
+        self._options_modify[None] = modify
+
+    def remove_options_modify(self) -> None:
+        """
+        Remove any set default options modify
+        """
+        if None in self._options_modify:
+            del self._options_modify[None]
+
     def on(self, path: str) -> T_CO_ScenarioFile:
         """
         Create, store and remember ScenarioFile objects for specific paths
@@ -214,25 +233,56 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
             )
         return self._known_files[path]
 
+    def modify_options(
+        self, options: protocols.RunOptions[protocols.T_Scenario]
+    ) -> protocols.RunOptions[protocols.T_Scenario]:
+        """
+        Used to apply the set options_modify
+
+        Useful to override if there's particular global modifications to the
+        defaults that need to be made regardless of whether the options passed to
+        ``run_and_check`` have been created by ``determine_options`` or not.
+        """
+        if None in self._options_modify:
+            options = self._options_modify[None](options)
+
+        return options
+
+    def determine_options(
+        self,
+        *,
+        program_runner_maker: protocols.ProgramRunnerMaker[protocols.T_Scenario] | None = None,
+        modify_options: Sequence[protocols.RunOptionsModify[protocols.T_Scenario]] | None = None,
+        **kwargs: Unpack[protocols.RunOptionsCloneArgs],
+    ) -> protocols.RunOptions[protocols.T_Scenario]:
+        return runners.RunOptions.create(
+            self.scenario_runner,
+            program_runner_maker=program_runner_maker,
+            modify_options=(self.modify_options, *(modify_options or ())),
+            **kwargs,
+        )
+
     def run_and_check(
         self,
         *,
-        _change_expectations: Callable[[], None] | None = None,
+        options: protocols.RunOptions[protocols.T_Scenario] | None = None,
+        _extra_setup: Callable[[], None] | None = None,
     ) -> None:
         """
         Call run_and_check on the scenario_runner with expectations created
         by the builder
         """
+        if options is None:
+            options = self.determine_options()
+        else:
+            options = self.modify_options(options)
 
-        def setup_expectations(
-            *, options: protocols.RunOptions[protocols.T_Scenario]
-        ) -> protocols.ExpectationsMaker[protocols.T_Scenario]:
-            if _change_expectations is not None:
-                _change_expectations()
-
-            return functools.partial(self.make_expectations, options=options)
-
-        return self.scenario_runner.run_and_check(setup_expectations)
+        return self.scenario_runner.run_and_check(
+            options=options,
+            setup_expectations=functools.partial(
+                self.setup_expectations, extra_setup=_extra_setup
+            ),
+        )
 
     def run_and_check_after(self, action: Callable[[], None]) -> None:
         """
@@ -254,21 +304,27 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
 
         :param action: The function to call to setup the scenario
         """
-        self.run_and_check(_change_expectations=action)
+        self.run_and_check(_extra_setup=action)
 
-    def make_expectations(
-        self, *, options: protocols.RunOptions[protocols.T_Scenario]
-    ) -> protocols.Expectations[protocols.T_Scenario]:
+    def setup_expectations(
+        self,
+        *,
+        options: protocols.RunOptions[protocols.T_Scenario],
+        extra_setup: Callable[[], None] | None = None,
+    ) -> protocols.ExpectationsMaker[protocols.T_Scenario]:
         """
         Used to generate the expectations the builder is aware of
 
         :param options: The options for running the type checker
         :returns: The expectations for the run
         """
+        if extra_setup is not None:
+            extra_setup()
+
         root_dir = options.cwd
         program_notices = options.scenario_runner.generate_program_notices()
 
-        return expectations.Expectations(
+        return lambda: expectations.Expectations[protocols.T_Scenario](
             expect_fail=self.scenario_runner.scenario.expects.failure,
             expect_stderr="",
             expect_notices=program_notices.set_files(

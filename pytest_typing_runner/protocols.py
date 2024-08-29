@@ -108,7 +108,7 @@ class RunOptions(Protocol[T_Scenario]):
         """
 
 
-class RunOptionsModify(Protocol):
+class RunOptionsModify(Protocol[T_Scenario]):
     """
     Represents a function that can return a modified run options
     """
@@ -830,7 +830,9 @@ class ScenarioRunner(Protocol[T_Scenario]):
         Called to use the run options to run a type checker and get a result
         """
 
-    def run_and_check(self, setup_expectations: ExpectationsSetup[T_Scenario]) -> None:
+    def run_and_check(
+        self, *, options: RunOptions[T_Scenario], setup_expectations: ExpectationsSetup[T_Scenario]
+    ) -> None:
         """
         Used to do a run of a type checker and check against the provided expectations
         """
@@ -961,6 +963,7 @@ if TYPE_CHECKING:
     P_RunOptions = RunOptions[P_Scenario]
     P_NoticeChecker = NoticeChecker[P_Scenario]
     P_ProgramRunner = ProgramRunner[P_Scenario]
+    P_RunOptionsModify = RunOptionsModify[P_Scenario]
     P_ProgramRunnerMaker = ProgramRunnerMaker[P_Scenario]
 
     P_RunResult = RunResult
@@ -968,7 +971,6 @@ if TYPE_CHECKING:
     P_RunCleaners = RunCleaners
     P_FileModifier = FileModifier
     P_RunnerConfig = RunnerConfig
-    P_RunOptionsModify = RunOptionsModify
     P_ProgramRunnerChooser = ProgramRunnerChooser
 
     P_Strategy = Strategy
