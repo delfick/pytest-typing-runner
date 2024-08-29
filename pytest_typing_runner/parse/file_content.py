@@ -57,6 +57,123 @@ class CommentMatch:
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
+class InlineCommentMatch(CommentMatch):
+    """
+    Represents the information for a single inline mypy stubtest style comment
+
+    Implementation of :protocol:`pytest_typing_runner.parse.protocols.CommentMatch`
+
+    Will match a comment hash followed by a single letter ``N``, ``E`` or ``W``
+    indicating ``note``, ``error`` and ``warning`` severity respectively.
+
+    And then either followed by a lonely colon or a colon followed by a column number
+    and then the message.
+
+    i.e.
+
+    * ``# N: Revealed type is "builtins.int"``
+    * ``# E: Incompatible types in assignment  [assignment]``
+
+    Where further hashes in the message may be escaped with a ``\``
+    """
+
+    class _Instruction(enum.Enum):
+        N = "N"
+        E = "E"
+        W = "W"
+
+    instruction_regex: ClassVar[re.Pattern[str]] = re.compile(
+        r"(?P<instruction>N|E|W):((?P<col>\d+) )? (?P<rest>.+)"
+    )
+
+    error_type_regex: ClassVar[re.Pattern[str]] = re.compile(r"\s+\[(?P<error_type>[^\]]+)\]\s*$")
+
+    # Used to split by unescaped hashes
+    split_regex: ClassVar[re.Pattern[str]] = re.compile(r"(?<!\\)# ?")
+
+    @classmethod
+    def make_parser(cls) -> parse_protocols.LineParser:
+        """
+        Yield a parser for parsing a line.
+
+        Wraps :func:`match` with a :class:`InstructionParser`
+        """
+        return InstructionParser(parser=cls.match).parse
+
+    @classmethod
+    def match(cls, line: str) -> Iterator[Self]:
+        """
+        Yield a comment match for lines that match an instruction
+
+        Implementation of :protocol:`pytest_typing_runner.parse.protocols.CommentMatchMaker`
+
+        This will make sure:
+
+        * No match yields no comment matches
+        * E instruction may have an optional error type
+        * E instructions sets ``is_error=True``
+        * N instructions sets ``is_note=True``
+        * W instructions sets ``is_warning=True``
+        * All instructions set ``is_whole_line=False``
+
+        Lines that only have whitespace before the first hash will be ignored
+        """
+        if "#" not in line:
+            return
+
+        split = list(cls.split_regex.split(line))
+        if len(split) < 2:
+            return
+
+        if not split[0].strip():
+            return
+
+        for part in split:
+            m = cls.instruction_regex.match(part)
+            if m is None:
+                continue
+
+            gd = m.groupdict()
+            instruction = cls._Instruction(gd["instruction"])
+            rest = gd["rest"].strip()
+            error_type = ""
+
+            if instruction is cls._Instruction.E:
+                me = cls.error_type_regex.search(rest)
+                if me:
+                    error_type = me.groupdict()["error_type"]
+                    rest = rest[: me.span()[0]]
+
+            match instruction:
+                case cls._Instruction.E:
+                    yield cls(
+                        names=[],
+                        is_error=True,
+                        is_whole_line=False,
+                        severity=notices.ErrorSeverity(error_type),
+                        msg=rest.strip(),
+                    )
+                case cls._Instruction.N:
+                    yield cls(
+                        names=[],
+                        is_note=True,
+                        is_whole_line=False,
+                        severity=notices.NoteSeverity(),
+                        msg=rest.strip(),
+                    )
+                case cls._Instruction.W:
+                    yield cls(
+                        names=[],
+                        is_warning=True,
+                        is_whole_line=False,
+                        severity=notices.WarningSeverity(),
+                        msg=rest.strip(),
+                    )
+                case _:
+                    assert_never(instruction)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class InstructionMatch(CommentMatch):
     """
     Represents the information for a single instruction comment
@@ -275,7 +392,9 @@ class InstructionParser:
         changers: list[protocols.LineNoticesChanger] = []
         modify_lines: parse_protocols.ModifyParsedLineBefore | None = None
 
-        for match in matches:
+        def add(match: parse_protocols.CommentMatch) -> None:
+            nonlocal modify_lines
+
             names.extend(match.names)
             if match.modify_lines:
                 if modify_lines is not None:
@@ -329,6 +448,9 @@ class InstructionParser:
                     )
                 )
 
+        for match in matches:
+            add(match)
+
         return _ParsedLineAfter(
             real_line=any(not match.is_whole_line for match in matches),
             names=names,
@@ -352,7 +474,7 @@ class FileContent:
     """
 
     parsers: Sequence[parse_protocols.LineParser] = dataclasses.field(
-        default_factory=lambda: (InstructionMatch.make_parser(),)
+        default_factory=lambda: (InstructionMatch.make_parser(), InlineCommentMatch.make_parser())
     )
 
     def _modify(
