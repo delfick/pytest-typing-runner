@@ -2,6 +2,7 @@ import pathlib
 from collections.abc import Sequence
 
 import pytest
+from pytest_typing_runner_test_driver import matchers
 
 from pytest_typing_runner import notice_changers, notices, protocols
 
@@ -377,3 +378,105 @@ class TestModifyFile:
         assert ff1 is not None
         assert list(ff1.notices_at_line(1) or []) == [n1]
         assert list(ff1.notices_at_line(2) or []) == [n2]
+
+
+class TestBulkAdd:
+    def test_it_can_bulk_add(self, tmp_path: pathlib.Path) -> None:
+        def names(notices: protocols.ProgramNotices) -> dict[tuple[str, int], str]:
+            result: dict[tuple[str, int], str] = {}
+            for location in notices.known_locations():
+                path = str(location.relative_to(tmp_path))
+                file_notices = notices.notices_at_location(location)
+                assert file_notices is not None
+                for name, line_number in file_notices.known_names.items():
+                    result[(path, line_number)] = name
+            return result
+
+        program_notices: protocols.ProgramNotices = notices.ProgramNotices()
+        assert list(program_notices) == []
+        assert names(program_notices) == {}
+
+        program_notices = notice_changers.BulkAdd(root_dir=tmp_path, add={})(program_notices)
+        assert list(program_notices) == []
+        assert names(program_notices) == {}
+
+        program_notices = notice_changers.BulkAdd(
+            root_dir=tmp_path,
+            add={
+                "one": {1: "hello"},
+                "two/three": {20: ["there"]},
+            },
+        )(program_notices)
+        assert list(program_notices) == [
+            matchers.MatchNote(location=tmp_path / "one", line_number=1, msg="hello"),
+            matchers.MatchNote(location=tmp_path / "two/three", line_number=20, msg="there"),
+        ]
+        assert names(program_notices) == {}
+
+        program_notices = notice_changers.BulkAdd(
+            root_dir=tmp_path,
+            add={
+                "one": {1: ["there"], 2: [(notices.ErrorSeverity("arg-type"), "e1"), "things"]},
+                "two/three": {(20, "blah"): []},
+                "four": {20: [(notices.ErrorSeverity("assignment"), "e2")]},
+            },
+        )(program_notices)
+        assert sorted(program_notices) == [
+            matchers.MatchNotice(
+                location=tmp_path / "four",
+                line_number=20,
+                severity=notices.ErrorSeverity("assignment"),
+                msg="e2",
+            ),
+            matchers.MatchNote(location=tmp_path / "one", line_number=1, msg="hello"),
+            matchers.MatchNote(location=tmp_path / "one", line_number=1, msg="there"),
+            matchers.MatchNotice(
+                location=tmp_path / "one",
+                line_number=2,
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="e1",
+            ),
+            matchers.MatchNote(location=tmp_path / "one", line_number=2, msg="things"),
+            matchers.MatchNote(location=tmp_path / "two/three", line_number=20, msg="there"),
+        ]
+        assert names(program_notices) == {("two/three", 20): "blah"}
+
+        program_notices = notice_changers.BulkAdd(
+            root_dir=tmp_path,
+            add={
+                "one": {(2, "other"): ["things2"]},
+                "two/three": {20: []},
+                "four": {20: [(notices.ErrorSeverity("var-annotated"), "e3")]},
+                "five": {(1, "tree"): []},
+            },
+        )(program_notices)
+        assert sorted(program_notices) == [
+            matchers.MatchNotice(
+                location=tmp_path / "four",
+                line_number=20,
+                severity=notices.ErrorSeverity("assignment"),
+                msg="e2",
+            ),
+            matchers.MatchNotice(
+                location=tmp_path / "four",
+                line_number=20,
+                severity=notices.ErrorSeverity("var-annotated"),
+                msg="e3",
+            ),
+            matchers.MatchNote(location=tmp_path / "one", line_number=1, msg="hello"),
+            matchers.MatchNote(location=tmp_path / "one", line_number=1, msg="there"),
+            matchers.MatchNotice(
+                location=tmp_path / "one",
+                line_number=2,
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="e1",
+            ),
+            matchers.MatchNote(location=tmp_path / "one", line_number=2, msg="things"),
+            matchers.MatchNote(location=tmp_path / "one", line_number=2, msg="things2"),
+            matchers.MatchNote(location=tmp_path / "two/three", line_number=20, msg="there"),
+        ]
+        assert names(program_notices) == {
+            ("one", 2): "other",
+            ("two/three", 20): "blah",
+            ("five", 1): "tree",
+        }

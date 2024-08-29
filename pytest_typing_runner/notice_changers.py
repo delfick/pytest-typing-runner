@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from collections.abc import Callable, MutableMapping, Sequence
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from typing import TYPE_CHECKING, cast
 
 from . import errors, protocols
@@ -379,7 +379,7 @@ class ModifyFile:
             if ``must_exist`` is ``True`` and the ``location`` isn't already in the
             program notices.
         :returns:
-            A copy of the program notices with chagned file notices for the specified
+            A copy of the program notices with changed file notices for the specified
             location.
         """
         file_notices = notices.notices_at_location(self.location)
@@ -392,9 +392,115 @@ class ModifyFile:
         return notices.set_files({self.location: self.change(file_notices)})
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class BulkAdd:
+    """
+    Used to bulk add notices to a program notices.
+
+    .. code-block:: python
+
+        from pytest_typing_runner import notice_changers, protocols
+        import pathlib
+
+
+        root_dir = pathlib.Path(...)
+
+        program_notices: protocols.ProgramNotices = ...
+
+        changer = notice_changers.BulkAdd(
+            root_dir=root_dir,
+            add={
+                "one": {
+                    1: [
+                        "a note",
+                        (notices.ErrorSeverity("arg-type"), "an error"),
+                    ],
+                    (20, "name"): [...],
+                },
+                "two/three": {...},
+            },
+        )
+
+        program_notices = changer(program_notices)
+        # and now we have program notices for:
+        # location=(root_dir / "one") | line_number=1 | severity=note | msg="a note"
+        # location=(root_dir / "one") | line_number=1 | severity=error(arg-type) | msg="an error"
+        # location=(root_dir / "one") | line_number=20 | ...
+        # location=(root_dir / "two" / "three") | ...
+        #
+        # And line 20 will have the name "name"
+
+    :param root_dir: The path all locations are relative to
+    :param add:
+        A Mapping of path to Mapping of line number to sequence of notices.
+
+        Where the key for the line number is either an integer or a tuple of
+        ``(line_number, line_name)`` for registering that name to that line number
+        in that location.
+
+        Where the notices are either a string indicating a note severity notice
+        or a tuple of ``(severity, msg)``.
+
+    .. automethod:: __call__
+    """
+
+    root_dir: pathlib.Path
+    add: Mapping[
+        str, Mapping[int | tuple[int, str], Sequence[str | tuple[protocols.Severity, str]]]
+    ]
+
+    def __call__(self, notices: protocols.ProgramNotices) -> protocols.ProgramNotices:
+        """
+        Add the specified notices
+
+        :param notices: The program notices to change
+        :returns:
+            A copy of the program notices with additional notices.
+        """
+        for path, by_line in self.add.items():
+            location = self.root_dir / path
+            file_notices = notices.notices_at_location(
+                location
+            ) or notices.generate_notices_for_location(location)
+
+            for line_and_name, ns in by_line.items():
+                if isinstance(line_and_name, int):
+                    line_number = line_and_name
+                else:
+                    line_number, name = line_and_name
+                    file_notices = file_notices.set_name(name, line_number)
+
+                line_notices = file_notices.notices_at_line(
+                    line_number
+                ) or file_notices.generate_notices_for_line(line_number)
+                notices_for_line: list[protocols.ProgramNotice] = list(line_notices)
+
+                if isinstance(ns, str):
+                    ns = [ns]
+
+                for n in ns:
+                    if isinstance(n, str):
+                        notices_for_line.append(line_notices.generate_notice(msg=n))
+                    else:
+                        notices_for_line.append(
+                            line_notices.generate_notice(severity=n[0], msg=n[1])
+                        )
+
+                if notices_for_line:
+                    file_notices = file_notices.set_lines(
+                        {line_number: line_notices.set_notices(notices_for_line)}
+                    )
+
+            if file_notices.has_notices or file_notices.known_names:
+                notices = notices.set_files({location: file_notices})
+
+        return notices
+
+
 if TYPE_CHECKING:
     _FMO: protocols.ProgramNoticeChanger = cast(FirstMatchOnly, None)
     _ATL: protocols.LineNoticesChanger = cast(AppendToLine, None)
     _MLM: protocols.LineNoticesChanger = cast(ModifyLatestMatch, None)
     _ML: protocols.FileNoticesChanger = cast(ModifyLine, None)
     _MF: protocols.ProgramNoticesChanger = cast(ModifyFile, None)
+    _BA: protocols.ProgramNoticesChanger = cast(BulkAdd, None)

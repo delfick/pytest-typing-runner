@@ -57,4 +57,5 @@ class MatchNote(MatchNotice):
         msg: NotRequired[_Comparable]
 
     def __init__(self, **check: Unpack[_Compare]) -> None:
+        assert "severity" not in check
         super().__init__(**{**check, "severity": notices.NoteSeverity()})

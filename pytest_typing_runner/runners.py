@@ -99,7 +99,7 @@ class MypyChecker(Generic[protocols.T_Scenario]):
     :param runner: The program runner that was used
     """
 
-    result: expectations.RunResult
+    result: protocols.RunResult
     runner: protocols.ProgramRunner[protocols.T_Scenario]
 
     def _check_lines(self, lines: list[str], expected_notices: protocols.ProgramNotices) -> None:
