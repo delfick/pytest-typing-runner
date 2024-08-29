@@ -7,7 +7,7 @@ import os
 import pathlib
 import subprocess
 import sys
-from collections.abc import Iterator, MutableMapping, MutableSequence, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, ClassVar, Generic, TextIO, cast
 
 import pytest
@@ -37,10 +37,10 @@ class RunOptions(Generic[protocols.T_Scenario]):
     scenario_runner: protocols.ScenarioRunner[protocols.T_Scenario]
     make_program_runner: protocols.ProgramRunnerMaker[protocols.T_Scenario]
     cwd: pathlib.Path
-    args: MutableSequence[str]
-    check_paths: MutableSequence[str]
+    args: Sequence[str]
+    check_paths: Sequence[str]
     do_followup: bool
-    environment_overrides: MutableMapping[str, str | None]
+    environment_overrides: Mapping[str, str | None]
 
     def clone(
         self,

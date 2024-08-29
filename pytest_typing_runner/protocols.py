@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pathlib
-from collections.abc import Iterator, Mapping, MutableMapping, MutableSequence, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Literal, Protocol, TypedDict, TypeVar, cast, overload
 
 from typing_extensions import NotRequired, Self, Unpack
@@ -44,10 +44,10 @@ class RunOptionsCloneArgs(TypedDict):
     """
 
     cwd: NotRequired[pathlib.Path]
-    args: NotRequired[MutableSequence[str]]
-    check_paths: NotRequired[MutableSequence[str]]
+    args: NotRequired[Sequence[str]]
+    check_paths: NotRequired[Sequence[str]]
     do_followup: NotRequired[bool]
-    environment_overrides: NotRequired[MutableMapping[str, str | None]]
+    environment_overrides: NotRequired[Mapping[str, str | None]]
 
 
 class RunOptions(Protocol[T_Scenario]):
@@ -74,13 +74,13 @@ class RunOptions(Protocol[T_Scenario]):
         """
 
     @property
-    def args(self) -> MutableSequence[str]:
+    def args(self) -> Sequence[str]:
         """
         The arguments to pass into the type checker
         """
 
     @property
-    def check_paths(self) -> MutableSequence[str]:
+    def check_paths(self) -> Sequence[str]:
         """
         The paths to check with the type checker
         """
@@ -92,7 +92,7 @@ class RunOptions(Protocol[T_Scenario]):
         """
 
     @property
-    def environment_overrides(self) -> MutableMapping[str, str | None]:
+    def environment_overrides(self) -> Mapping[str, str | None]:
         """
         Overrides of environment variables for when running the type checker
         """

@@ -139,10 +139,7 @@ class TestScenarioRun:
         def test_it_prints_runner_command_plus_args_and_check_paths(
             self, options: protocols.RunOptions[protocols.Scenario]
         ) -> None:
-            options.args.clear()
-            options.args.extend(["a1", "a2"])
-            options.check_paths.clear()
-            options.check_paths.extend(["c1", "c2"])
+            options = options.clone(args=["a1", "a2"], check_paths=["c1", "c2"])
             notice_checker = options.make_program_runner(options=options).run()
 
             scenario_run = scenarios.ScenarioRun(
