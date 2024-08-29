@@ -370,7 +370,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         """
         Used to run the type checker.
 
-        By default it uses ``make_program_runner`` on the options to create
+        By default it uses ``program_runner_maker`` on the options to create
         a program runner and the ``run`` method is called, passing on the result
 
         :param options: The run options
@@ -378,7 +378,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
             A :protocol:`pytest_typing_runner.protocols.NoticeChecker` object
             representing what was run, the result, and how to check it.
         """
-        return options.make_program_runner(options=options).run()
+        return options.program_runner_maker(options=options).run()
 
     def run_and_check(
         self,

@@ -78,11 +78,11 @@ class TestScenarioRunner:
         self, runner: scenarios.ScenarioRunner[protocols.Scenario]
     ) -> None:
         options = runners.RunOptions.create(runner)
-        notice_checker = options.make_program_runner(options=options).run()
+        notice_checker = options.program_runner_maker(options=options).run()
         runner.runs.add_run(checker=notice_checker, expectation_error=None)
 
         options = runners.RunOptions.create(runner)
-        notice_checker = options.make_program_runner(options=options).run()
+        notice_checker = options.program_runner_maker(options=options).run()
         runner.runs.add_run(checker=notice_checker, expectation_error=None)
 
         name = "the report!"
@@ -124,17 +124,17 @@ class TestScenarioRunner:
                 called.append(("make", options))
                 return Runner(options=options)
 
-        make_program_runner = ProgramRunnerMaker()
+        program_runner_maker = ProgramRunnerMaker()
         scenario: protocols.Scenario = scenarios.Scenario.create(config, tmp_path)
         runner = scenarios.ScenarioRunner(
             scenario=scenario,
-            default_program_runner_maker=make_program_runner,
+            default_program_runner_maker=program_runner_maker,
             runs=scenarios.ScenarioRuns(scenario=scenario),
             cleaners=scenarios.RunCleaners(),
         )
 
         options = runners.RunOptions.create(runner)
-        assert options.make_program_runner is make_program_runner
+        assert options.program_runner_maker is program_runner_maker
         assert called == []
         checker = runner.execute_static_checking(options=options)
         assert called == [("make", options), ("run", checker)]
@@ -151,19 +151,19 @@ class TestScenarioRunner:
             assert not runner.runs.has_runs
 
             options = runners.RunOptions.create(runner)
-            notice_checker = options.make_program_runner(options=options).run()
+            notice_checker = options.program_runner_maker(options=options).run()
             r1 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r1.file_modifications) == []
 
             options = runners.RunOptions.create(runner)
-            notice_checker = options.make_program_runner(options=options).run()
+            notice_checker = options.program_runner_maker(options=options).run()
             r2 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r2.file_modifications) == []
 
             runner.file_modification("one", "two")
             runner.file_modification("two/more", "three")
             options = runners.RunOptions.create(runner)
-            notice_checker = options.make_program_runner(options=options).run()
+            notice_checker = options.program_runner_maker(options=options).run()
             r3 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r3.file_modifications) == [("one", "create"), ("two/more", "create")]
 
@@ -172,7 +172,7 @@ class TestScenarioRunner:
             runner.file_modification("two/more", "four")
             runner.file_modification("five", "six")
             options = runners.RunOptions.create(runner)
-            notice_checker = options.make_program_runner(options=options).run()
+            notice_checker = options.program_runner_maker(options=options).run()
             r4 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r4.file_modifications) == [
                 ("one", "delete"),
@@ -184,7 +184,7 @@ class TestScenarioRunner:
             runner.file_modification("seven", "blah")
             runner.file_modification("two", None)
             options = runners.RunOptions.create(runner)
-            notice_checker = options.make_program_runner(options=options).run()
+            notice_checker = options.program_runner_maker(options=options).run()
             r5 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r5.file_modifications) == [("seven", "create"), ("two", "delete")]
 
@@ -194,14 +194,14 @@ class TestScenarioRunner:
             runner.file_modification("one", "two")
             runner.file_modification("two/more", "three")
             options = runners.RunOptions.create(runner)
-            notice_checker = options.make_program_runner(options=options).run()
+            notice_checker = options.program_runner_maker(options=options).run()
             r1 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r1.file_modifications) == [("one", "create"), ("two/more", "create")]
 
             runner.file_modification("one", "two")
             runner.file_modification("two/other", "four")
             options = runners.RunOptions.create(runner)
-            notice_checker = options.make_program_runner(options=options).run()
+            notice_checker = options.program_runner_maker(options=options).run()
             r3 = runner.runs.add_run(checker=notice_checker, expectation_error=None)
             assert list(r3.file_modifications) == [("two/other", "create")]
 

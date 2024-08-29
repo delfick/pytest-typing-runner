@@ -80,7 +80,7 @@ class TestScenarioRun:
         return runners.RunOptions.create(scenario_runner)
 
     def test_it_has_attributes(self, options: protocols.RunOptions[protocols.Scenario]) -> None:
-        notice_checker = options.make_program_runner(options=options).run()
+        notice_checker = options.program_runner_maker(options=options).run()
         scenario_run = scenarios.ScenarioRun(
             is_first=True,
             is_followup=False,
@@ -99,7 +99,7 @@ class TestScenarioRun:
         self, options: protocols.RunOptions[protocols.Scenario]
     ) -> None:
         error = Exception("Computer says no")
-        notice_checker = options.make_program_runner(options=options).run()
+        notice_checker = options.program_runner_maker(options=options).run()
         scenario_run = scenarios.ScenarioRun(
             is_first=False,
             is_followup=True,
@@ -114,7 +114,7 @@ class TestScenarioRun:
         def test_it_prints_each_file_modification(
             self, options: protocols.RunOptions[protocols.Scenario]
         ) -> None:
-            notice_checker = options.make_program_runner(options=options).run()
+            notice_checker = options.program_runner_maker(options=options).run()
             scenario_run = scenarios.ScenarioRun(
                 is_first=True,
                 is_followup=False,
@@ -140,7 +140,7 @@ class TestScenarioRun:
             self, options: protocols.RunOptions[protocols.Scenario]
         ) -> None:
             options = options.clone(args=["a1", "a2"], check_paths=["c1", "c2"])
-            notice_checker = options.make_program_runner(options=options).run()
+            notice_checker = options.program_runner_maker(options=options).run()
 
             scenario_run = scenarios.ScenarioRun(
                 is_first=True,
@@ -164,7 +164,7 @@ class TestScenarioRun:
         def test_it_prints_that_it_is_followup_if_followup(
             self, options: protocols.RunOptions[protocols.Scenario]
         ) -> None:
-            notice_checker = options.make_program_runner(options=options).run()
+            notice_checker = options.program_runner_maker(options=options).run()
 
             scenario_run = scenarios.ScenarioRun(
                 is_first=False,
@@ -188,7 +188,7 @@ class TestScenarioRun:
         def test_it_prints_expectation_error(
             self, options: protocols.RunOptions[protocols.Scenario]
         ) -> None:
-            notice_checker = options.make_program_runner(options=options).run()
+            notice_checker = options.program_runner_maker(options=options).run()
 
             class ComputerSaysNo(Exception):
                 def __str__(self) -> str:
@@ -217,7 +217,7 @@ class TestScenarioRun:
         def test_it_prints_stdout_and_stderr_and_exit_code(
             self, options: protocols.RunOptions[protocols.Scenario]
         ) -> None:
-            runner = options.make_program_runner(options=options)
+            runner = options.program_runner_maker(options=options)
             notice_checker = stubs.StubNoticeChecker(
                 runner=runner,
                 result=stubs.StubRunResult(
@@ -284,7 +284,7 @@ class TestScenarioRuns:
         assert "\n".join(runs.for_report()) == ""
 
         options = runners.RunOptions.create(runner)
-        notice_checker = options.make_program_runner(options=options).run()
+        notice_checker = options.program_runner_maker(options=options).run()
         runs.add_run(checker=notice_checker, expectation_error=None)
         assert runs.has_runs
 
@@ -301,7 +301,7 @@ class TestScenarioRuns:
         )
 
         options = runners.RunOptions.create(runner)
-        notice_checker = options.make_program_runner(options=options).run()
+        notice_checker = options.program_runner_maker(options=options).run()
         runs.add_run(checker=notice_checker, expectation_error=None)
         assert runs.has_runs
 
@@ -326,7 +326,7 @@ class TestScenarioRuns:
         options.args.append("one")
         options.check_paths.append("two")
         notice_checker = stubs.StubNoticeChecker(
-            runner=options.make_program_runner(options=options),
+            runner=options.program_runner_maker(options=options),
             result=stubs.StubRunResult(
                 exit_code=2,
                 stdout="one\ntwo  \nthree four\nfive::",
@@ -377,7 +377,7 @@ class TestScenarioRuns:
         options = runners.RunOptions.create(runner)
         runs.add_file_modification("some/path", "create")
         runs.add_file_modification("some/other/path", "change")
-        notice_checker = options.make_program_runner(options=options).run()
+        notice_checker = options.program_runner_maker(options=options).run()
         runs.add_run(checker=notice_checker, expectation_error=None)
         assert runs.has_runs
 
@@ -396,7 +396,7 @@ class TestScenarioRuns:
         )
 
         options = runners.RunOptions.create(runner)
-        notice_checker = options.make_program_runner(options=options).run()
+        notice_checker = options.program_runner_maker(options=options).run()
         runs.add_run(checker=notice_checker, expectation_error=None)
         assert runs.has_runs
 
@@ -421,7 +421,7 @@ class TestScenarioRuns:
 
         options = runners.RunOptions.create(runner)
         options.args.append("one")
-        notice_checker = options.make_program_runner(options=options).run()
+        notice_checker = options.program_runner_maker(options=options).run()
 
         runs.add_file_modification("some/path", "remove")
         runs.add_file_modification("other/blah", "change")

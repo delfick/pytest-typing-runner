@@ -43,7 +43,7 @@ class TestExpectations:
             scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
         options = runners.RunOptions.create(runner)
-        program_runner = options.make_program_runner(options=options)
+        program_runner = options.program_runner_maker(options=options)
 
         called: list[object] = []
 
@@ -82,7 +82,7 @@ class TestExpectations:
             scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
         options = runners.RunOptions.create(runner)
-        program_runner = options.make_program_runner(options=options)
+        program_runner = options.program_runner_maker(options=options)
 
         notice_checker = stubs.StubNoticeChecker(
             result=stubs.StubRunResult(exit_code=0, stderr="hello", stdout=""),
@@ -109,7 +109,7 @@ class TestExpectations:
             scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
         options = runners.RunOptions.create(runner)
-        program_runner = options.make_program_runner(options=options)
+        program_runner = options.program_runner_maker(options=options)
 
         notice_checker = stubs.StubNoticeChecker(
             result=stubs.StubRunResult(exit_code=0, stderr="", stdout=""),
@@ -136,7 +136,7 @@ class TestExpectations:
             scenario_runs_maker=scenarios.ScenarioRuns.create,
         )
         options = runners.RunOptions.create(runner)
-        program_runner = options.make_program_runner(options=options)
+        program_runner = options.program_runner_maker(options=options)
 
         notice_checker = stubs.StubNoticeChecker(
             result=stubs.StubRunResult(exit_code=99, stderr="", stdout=""),

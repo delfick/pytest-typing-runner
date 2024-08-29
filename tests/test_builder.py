@@ -424,7 +424,7 @@ class TestUsingBuilder:
         ) -> protocols.RunOptions[TestUsingBuilder.Scenario]:
             options = super().modify_options(options)
             return options.clone(
-                make_program_runner=stubs.StubProgramRunnerMaker(
+                program_runner_maker=stubs.StubProgramRunnerMaker(
                     runner_kls=TestUsingBuilder.ProgramRunner
                 )
             )

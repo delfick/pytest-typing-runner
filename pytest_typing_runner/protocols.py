@@ -68,7 +68,7 @@ class RunOptions(Protocol[T_Scenario]):
         """
 
     @property
-    def make_program_runner(self) -> ProgramRunnerMaker[T_Scenario]:
+    def program_runner_maker(self) -> ProgramRunnerMaker[T_Scenario]:
         """
         Make the specific type checker to run
         """
@@ -100,7 +100,7 @@ class RunOptions(Protocol[T_Scenario]):
     def clone(
         self,
         *,
-        make_program_runner: ProgramRunnerMaker[T_Scenario] | None = None,
+        program_runner_maker: ProgramRunnerMaker[T_Scenario] | None = None,
         **kwargs: Unpack[RunOptionsCloneArgs],
     ) -> Self:
         """

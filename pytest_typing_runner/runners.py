@@ -24,7 +24,7 @@ class RunOptions(Generic[protocols.T_Scenario]):
     Implements :protocol:`pytest_typing_runner.protocols.RunOptions`
 
     :param scenario_runner: The Scenario runner for this test
-    :param make_program_runner: Used to create the program runner for the run
+    :param program_runner_maker: Used to create the program runner for the run
     :param cwd: The working directory to run the program runner from
     :param args: The arguments to use when executing the type checker
     :param check_paths: The locations to make the type checker check
@@ -35,7 +35,7 @@ class RunOptions(Generic[protocols.T_Scenario]):
     """
 
     scenario_runner: protocols.ScenarioRunner[protocols.T_Scenario]
-    make_program_runner: protocols.ProgramRunnerMaker[protocols.T_Scenario]
+    program_runner_maker: protocols.ProgramRunnerMaker[protocols.T_Scenario]
     cwd: pathlib.Path
     args: Sequence[str]
     check_paths: Sequence[str]
@@ -45,16 +45,16 @@ class RunOptions(Generic[protocols.T_Scenario]):
     def clone(
         self,
         *,
-        make_program_runner: protocols.ProgramRunnerMaker[protocols.T_Scenario] | None = None,
+        program_runner_maker: protocols.ProgramRunnerMaker[protocols.T_Scenario] | None = None,
         **kwargs: Unpack[protocols.RunOptionsCloneArgs],
     ) -> Self:
         """
         Return a clone of the options with different options
         """
-        if make_program_runner is None:
+        if program_runner_maker is None:
             return dataclasses.replace(self, **kwargs)
         else:
-            return dataclasses.replace(self, make_program_runner=make_program_runner, **kwargs)
+            return dataclasses.replace(self, program_runner_maker=program_runner_maker, **kwargs)
 
     @classmethod
     def create(
@@ -73,7 +73,7 @@ class RunOptions(Generic[protocols.T_Scenario]):
 
         options: protocols.RunOptions[protocols.T_Scenario] = cls(
             scenario_runner=scenario_runner,
-            make_program_runner=program_runner_maker,
+            program_runner_maker=program_runner_maker,
             cwd=kwargs.get("cwd", scenario_runner.scenario.root_dir),
             args=kwargs.get("args", list(program_runner_maker.default_args)),
             do_followup=kwargs.get("do_followup", program_runner_maker.do_followups),
