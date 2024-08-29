@@ -5,6 +5,7 @@ import importlib
 import io
 import os
 import pathlib
+import re
 import subprocess
 import sys
 from collections.abc import Iterator, Mapping, Sequence
@@ -104,7 +105,7 @@ class MypyChecker(Generic[protocols.T_Scenario]):
 
     def _check_lines(self, lines: list[str], expected_notices: protocols.ProgramNotices) -> None:
         got = parse.MypyOutput.parse(
-            lines,
+            [l.strip() for l in lines if l.strip()],
             into=self.runner.options.scenario_runner.generate_program_notices(),
             normalise=functools.partial(
                 self.runner.options.scenario_runner.normalise_program_runner_notice,
@@ -240,22 +241,40 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
             stdout = io.StringIO()
             stderr = io.StringIO()
 
-            with stdout, stderr:
-                exit_code = self._run_inprocess(self.options, stdout=stdout, stderr=stderr)
+            cwd = pathlib.Path.cwd()
+            try:
+                os.chdir(str(self.options.cwd))
+                with stdout, stderr:
+                    exit_code = self._run_inprocess(self.options, stdout=stdout, stderr=stderr)
+                    stdout_value = stdout.getvalue()
+                    stderr_value = stderr.getvalue()
+            finally:
+                os.chdir(str(cwd))
 
             return MypyChecker(
                 runner=self,
                 result=expectations.RunResult(
                     exit_code=exit_code,
-                    stdout=stdout.getvalue(),
-                    stderr=stderr.getvalue(),
+                    stdout=stdout_value,
+                    stderr=stderr_value,
                 ),
             )
+
+    def _mypy_older_than_1_8(self) -> bool:
+        """
+        Determine if installed version of mypy is older than 1.8.0
+        """
+        version = importlib.metadata.version("mypy")
+        m = re.match("^1\.(\d+)\.\d+.*", version)
+        if m is None:
+            return False
+
+        return int(m.groups()[0]) < 8
 
     def _run_inprocess(
         self, options: protocols.RunOptions[protocols.T_Scenario], stdout: TextIO, stderr: TextIO
     ) -> int:
-        from mypy import build
+        from mypy import build, util
         from mypy.fscache import FileSystemCache
         from mypy.main import process_options
 
@@ -264,10 +283,10 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
             list([*options.args, *options.check_paths]), fscache=fscache
         )
 
-        error_messages: list[str] = []
+        messages: list[str] = []
 
         def flush_errors(filename: str | None, new_messages: list[str], is_serious: bool) -> None:
-            error_messages.extend(new_messages)
+            messages.extend(new_messages)
             f = stderr if is_serious else stdout
             try:
                 for msg in new_messages:
@@ -276,7 +295,7 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
             except BrokenPipeError:
                 sys.exit(2)
 
-        if importlib.metadata.version("mypy") < "1.8.0":
+        if self._mypy_older_than_1_8():
             new_flush_errors = flush_errors
 
             def flush_errors(new_messages: list[str], is_serious: bool) -> None:  # type: ignore[misc]
@@ -306,7 +325,8 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
         finally:
             fscache.flush()
 
-        if error_messages:
+        n_errors, _, _ = util.count_stats(messages)
+        if n_errors > 0:
             return 1
         else:
             return 0
