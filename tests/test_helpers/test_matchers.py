@@ -9,8 +9,8 @@ from pytest_typing_runner import notices, protocols
 
 @pytest.fixture
 def notice(tmp_path: pathlib.Path) -> protocols.ProgramNotice:
-    return notices.ProgramNotice(
-        location=tmp_path, line_number=10, severity=notices.NoteSeverity(), msg="hello", col=None
+    return notices.ProgramNotice.create(
+        location=tmp_path, line_number=10, severity=notices.NoteSeverity(), msg="hello"
     )
 
 

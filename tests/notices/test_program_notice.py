@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 class TestProgramNotice:
     def test_it_has_properties(self, tmp_path: pathlib.Path) -> None:
-        notice = notices.ProgramNotice(
+        notice = notices.ProgramNotice.create(
             location=tmp_path, line_number=20, col=2, severity=notices.NoteSeverity(), msg="stuff"
         )
         assert notice.location is tmp_path
@@ -35,8 +35,8 @@ class TestProgramNotice:
     def test_it_has_ability_to_know_if_notice_is_a_type_reveal(
         self, tmp_path: pathlib.Path
     ) -> None:
-        notice = notices.ProgramNotice(
-            location=tmp_path, line_number=10, severity=notices.NoteSeverity(), msg="", col=None
+        notice = notices.ProgramNotice.create(
+            location=tmp_path, line_number=10, severity=notices.NoteSeverity(), msg=""
         )
 
         assert not notice.is_type_reveal
@@ -55,13 +55,13 @@ class TestProgramNotice:
         ).is_type_reveal
 
     def test_it_can_clone(self, tmp_path: pathlib.Path) -> None:
-        notice = notices.ProgramNotice(
+        notice = notices.ProgramNotice.create(
             location=tmp_path, line_number=20, col=2, severity=notices.NoteSeverity(), msg="stuff"
         )
-        assert notice.clone(line_number=40) == notices.ProgramNotice(
+        assert notice.clone(line_number=40) == notices.ProgramNotice.create(
             location=tmp_path, line_number=40, col=2, severity=notices.NoteSeverity(), msg="stuff"
         )
-        assert notice.clone(col=None) == notices.ProgramNotice(
+        assert notice.clone(col=None) == notices.ProgramNotice.create(
             location=tmp_path,
             line_number=20,
             col=None,
@@ -70,11 +70,11 @@ class TestProgramNotice:
         )
 
         error_sev = notices.ErrorSeverity("arg-type")
-        assert notice.clone(severity=error_sev) == notices.ProgramNotice(
+        assert notice.clone(severity=error_sev) == notices.ProgramNotice.create(
             location=tmp_path, line_number=20, col=2, severity=error_sev, msg="stuff"
         )
 
-        assert notice.clone(msg="other") == notices.ProgramNotice(
+        assert notice.clone(msg="other") == notices.ProgramNotice.create(
             location=tmp_path,
             line_number=20,
             col=2,
@@ -84,7 +84,7 @@ class TestProgramNotice:
 
         assert notice.clone(
             line_number=42, col=5, severity=OtherSeverity("blah"), msg="things"
-        ) == notices.ProgramNotice(
+        ) == notices.ProgramNotice.create(
             location=tmp_path,
             line_number=42,
             col=5,
@@ -93,10 +93,9 @@ class TestProgramNotice:
         )
 
     def test_it_displays_when_no_col(self, tmp_path: pathlib.Path) -> None:
-        notice = notices.ProgramNotice(
+        notice = notices.ProgramNotice.create(
             location=tmp_path,
             line_number=20,
-            col=None,
             severity=notices.NoteSeverity(),
             msg="stuff",
         )
@@ -107,7 +106,7 @@ class TestProgramNotice:
         )
 
     def test_it_displays_when_have_col(self, tmp_path: pathlib.Path) -> None:
-        notice = notices.ProgramNotice(
+        notice = notices.ProgramNotice.create(
             location=tmp_path,
             line_number=20,
             col=10,
@@ -121,26 +120,24 @@ class TestProgramNotice:
         )
 
     def test_it_is_orderable(self, tmp_path: pathlib.Path) -> None:
-        n1 = notices.ProgramNotice(
+        n1 = notices.ProgramNotice.create(
             location=tmp_path, line_number=20, col=10, severity=notices.NoteSeverity(), msg="zebra"
         )
-        n2 = notices.ProgramNotice(
-            location=tmp_path, line_number=20, col=None, severity=notices.NoteSeverity(), msg="b"
+        n2 = notices.ProgramNotice.create(
+            location=tmp_path, line_number=20, severity=notices.NoteSeverity(), msg="b"
         )
-        n3 = notices.ProgramNotice(
-            location=tmp_path, line_number=40, col=None, severity=notices.NoteSeverity(), msg="a"
+        n3 = notices.ProgramNotice.create(
+            location=tmp_path, line_number=40, severity=notices.NoteSeverity(), msg="a"
         )
-        n4 = notices.ProgramNotice(
+        n4 = notices.ProgramNotice.create(
             location=tmp_path,
             line_number=20,
-            col=None,
             severity=notices.ErrorSeverity("arg-type"),
             msg="c",
         )
-        n5 = notices.ProgramNotice(
+        n5 = notices.ProgramNotice.create(
             location=tmp_path,
             line_number=10,
-            col=None,
             severity=notices.ErrorSeverity("var-annotated"),
             msg="d",
         )
@@ -149,7 +146,7 @@ class TestProgramNotice:
         assert sorted(original) == [n5, n1, n4, n2, n3]
 
     def test_it_can_match_against_another_program_notice(self, tmp_path: pathlib.Path) -> None:
-        notice = notices.ProgramNotice(
+        notice = notices.ProgramNotice.create(
             location=tmp_path, line_number=20, col=10, severity=notices.NoteSeverity(), msg="zebra"
         )
 
@@ -170,7 +167,7 @@ class TestProgramNotice:
         )
         assert not notice.clone(msg="one").matches(notice.clone(msg="two"))
         assert not notice.matches(
-            notices.ProgramNotice(
+            notices.ProgramNotice.create(
                 location=tmp_path / "two",
                 line_number=20,
                 col=10,

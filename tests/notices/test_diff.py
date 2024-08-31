@@ -46,11 +46,10 @@ class TestDiffFileNotices:
 class TestDiffNotices:
     def test_it_yields_sorted_by_file(self, tmp_path: pathlib.Path) -> None:
         def make_notice(location: pathlib.Path) -> protocols.ProgramNotice:
-            return notices.ProgramNotice(
+            return notices.ProgramNotice.create(
                 location=location,
                 line_number=0,
                 severity=notices.NoteSeverity(),
-                col=None,
                 msg="stuff",
             )
 

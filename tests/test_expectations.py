@@ -232,23 +232,21 @@ class TestCompareNotices:
 
     def test_it_makes_no_error_if_no_difference(self) -> None:
         def note(path: str, line_number: int, msg: str) -> protocols.ProgramNotice:
-            return notices.ProgramNotice(
+            return notices.ProgramNotice.create(
                 location=pathlib.Path(path),
                 line_number=line_number,
                 severity=notices.NoteSeverity(),
                 msg=msg,
-                col=None,
             )
 
         def error(
             path: str, line_number: int, error_type: str, msg: str
         ) -> protocols.ProgramNotice:
-            return notices.ProgramNotice(
+            return notices.ProgramNotice.create(
                 location=pathlib.Path(path),
                 line_number=line_number,
                 severity=notices.ErrorSeverity(error_type),
                 msg=msg,
-                col=None,
             )
 
         diff = notices.DiffNotices(
@@ -284,23 +282,21 @@ class TestCompareNotices:
 
     def test_it_shows_what_is_same_and_not_same_when_is_different(self) -> None:
         def note(path: str, line_number: int, msg: str) -> protocols.ProgramNotice:
-            return notices.ProgramNotice(
+            return notices.ProgramNotice.create(
                 location=pathlib.Path(path),
                 line_number=line_number,
                 severity=notices.NoteSeverity(),
                 msg=msg,
-                col=None,
             )
 
         def error(
             path: str, line_number: int, error_type: str, msg: str
         ) -> protocols.ProgramNotice:
-            return notices.ProgramNotice(
+            return notices.ProgramNotice.create(
                 location=pathlib.Path(path),
                 line_number=line_number,
                 severity=notices.ErrorSeverity(error_type),
                 msg=msg,
-                col=None,
             )
 
         diff = notices.DiffNotices(
