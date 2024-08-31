@@ -268,12 +268,14 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         A collection of cleanup functions that are used in the pytest fixture
         that provides an instance of the ``ScenarioRunner`` to perform any
         cleanup at the end of the run
+    :param default_msg_maker: Default used by ScenarioRunner when generating program notices
     """
 
     scenario: protocols.T_Scenario
     runs: protocols.ScenarioRuns[protocols.T_Scenario]
     cleaners: protocols.RunCleaners
     default_program_runner_maker: protocols.ProgramRunnerMaker[protocols.T_Scenario]
+    default_msg_maker: protocols.NoticeMsgMaker = notices.PlainMsg.create
 
     @classmethod
     def create(
@@ -441,11 +443,13 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         """
         return notice
 
-    def generate_program_notices(self) -> protocols.ProgramNotices:
+    def generate_program_notices(
+        self, *, msg_maker: protocols.NoticeMsgMaker | None = None
+    ) -> protocols.ProgramNotices:
         """
         Returns a default implementation of :protocol:`pytest_typing_runner.ProgramNotices`
         """
-        return notices.ProgramNotices()
+        return notices.ProgramNotices(msg_maker=self.default_msg_maker)
 
 
 if TYPE_CHECKING:

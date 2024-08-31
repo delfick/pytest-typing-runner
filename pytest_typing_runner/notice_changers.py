@@ -119,10 +119,8 @@ class AppendToLine:
             A copy of the passed in notices with the additional notices appended.
             This changer never returns ``None``.
         """
-        return notices.set_notices(
-            [*list(notices), *self.notices_maker(notices)],
-            allow_empty=True,
-        )
+        additional = self.notices_maker(notices)
+        return notices.set_notices([*list(notices), *additional], allow_empty=True)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -479,12 +477,12 @@ class BulkAdd:
                     ns = [ns]
 
                 for n in ns:
-                    if isinstance(n, str):
-                        notices_for_line.append(line_notices.generate_notice(msg=n))
-                    else:
+                    if isinstance(n, tuple):
                         notices_for_line.append(
                             line_notices.generate_notice(severity=n[0], msg=n[1])
                         )
+                    else:
+                        notices_for_line.append(line_notices.generate_notice(msg=n))
 
                 if notices_for_line:
                     file_notices = file_notices.set_lines(

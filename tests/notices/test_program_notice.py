@@ -1,7 +1,9 @@
 import dataclasses
 import pathlib
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
+
+from typing_extensions import Self
 
 from pytest_typing_runner import notices, protocols
 
@@ -28,6 +30,38 @@ class TestProgramNotice:
         assert notice.col == 2
         assert notice.severity == notices.NoteSeverity()
         assert notice.msg == "stuff"
+        assert isinstance(notice.msg, notices.PlainMsg)
+
+    def test_it_can_be_given_different_msg_maker(self, tmp_path: pathlib.Path) -> None:
+        class Msg(notices.NoticeMsgBase):
+            is_plain: ClassVar[bool] = True
+
+            @classmethod
+            def create(cls, *, pattern: str) -> Self:
+                return cls(pattern)
+
+            def match(self, *, want: str) -> bool:
+                raise NotImplementedError()
+
+            def clone(self, *, pattern: str) -> Self:
+                raise NotImplementedError()
+
+        notice = notices.ProgramNotice.create(
+            location=tmp_path,
+            line_number=20,
+            col=2,
+            severity=notices.NoteSeverity(),
+            msg="stuff",
+            msg_maker=Msg.create,
+        )
+        assert notice.msg == "stuff"
+        assert isinstance(notice.msg, Msg)
+
+        msg = Msg.create(pattern="stuff")
+        notice = notices.ProgramNotice(
+            location=tmp_path, line_number=20, col=2, severity=notices.NoteSeverity(), msg=msg
+        )
+        assert notice.msg is msg
 
     def test_it_has_classmethod_for_getting_reveal_msg(self) -> None:
         assert notices.ProgramNotice.reveal_msg("things") == 'Revealed type is "things"'
@@ -175,3 +209,5 @@ class TestProgramNotice:
                 msg="zebra",
             )
         )
+
+        assert notice.clone(msg=notices.RegexMsg("z.*")).matches(notice)

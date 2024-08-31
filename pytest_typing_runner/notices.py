@@ -285,7 +285,7 @@ class ProgramNotice:
     line_number: int
     col: int | None
     severity: protocols.Severity
-    msg: str
+    msg: protocols.NoticeMsg
 
     @classmethod
     def create(
@@ -294,9 +294,13 @@ class ProgramNotice:
         location: pathlib.Path,
         line_number: int,
         severity: protocols.Severity,
-        msg: str,
+        msg: str | protocols.NoticeMsg,
+        msg_maker: protocols.NoticeMsgMaker = PlainMsg.create,
         col: int | None = None,
     ) -> Self:
+        if isinstance(msg, str):
+            msg = msg_maker(pattern=msg)
+
         return cls(location=location, line_number=line_number, severity=severity, msg=msg, col=col)
 
     @classmethod
@@ -311,13 +315,24 @@ class ProgramNotice:
         """
         Returns whether this notice represents output from a `reveal_type(...)` instruction
         """
-        return self.severity == NoteSeverity() and self.msg.startswith('Revealed type is "')
+        return self.severity == NoteSeverity() and self.msg.raw.startswith('Revealed type is "')
 
-    def clone(self, **kwargs: Unpack[protocols.ProgramNoticeCloneKwargs]) -> Self:
+    def clone(
+        self,
+        *,
+        msg: str | protocols.NoticeMsg | None = None,
+        **kwargs: Unpack[protocols.ProgramNoticeCloneKwargs],
+    ) -> Self:
         """
         Return a copy of this notice with certain values replaced.
         """
-        return dataclasses.replace(self, **kwargs)
+        if isinstance(msg, str):
+            msg = self.msg.clone(pattern=msg)
+
+        if msg is None:
+            return dataclasses.replace(self, **kwargs)
+        else:
+            return dataclasses.replace(self, msg=msg, **kwargs)
 
     def display(self) -> str:
         """
@@ -350,7 +365,7 @@ class ProgramNotice:
             self.location == other.location
             and self.line_number == other.line_number
             and self.severity == other.severity
-            and self.msg == other.msg
+            and self.msg.match(want=other.msg.raw)
         )
         if not same:
             return False
@@ -374,6 +389,7 @@ class LineNotices:
 
     location: pathlib.Path
     line_number: int
+    msg_maker: protocols.NoticeMsgMaker = PlainMsg.create
 
     notices: Sequence[protocols.ProgramNotice] = dataclasses.field(default_factory=list)
 
@@ -418,7 +434,12 @@ class LineNotices:
         return dataclasses.replace(self, notices=replacement)
 
     def generate_notice(
-        self, *, msg: str, severity: protocols.Severity | None = None, col: int | None = None
+        self,
+        *,
+        msg: str | protocols.NoticeMsg,
+        msg_maker: protocols.NoticeMsgMaker | None = None,
+        severity: protocols.Severity | None = None,
+        col: int | None = None,
     ) -> protocols.ProgramNotice:
         """
         Return an object that satisfies :protocol:`pytest_typing_runner.protocols.ProgramNotice`
@@ -429,12 +450,17 @@ class LineNotices:
         """
         if severity is None:
             severity = NoteSeverity()
+
+        if msg_maker is None:
+            msg_maker = self.msg_maker
+
         return ProgramNotice.create(
             location=self.location,
             line_number=self.line_number,
             severity=severity,
             msg=msg,
             col=col,
+            msg_maker=msg_maker,
         )
 
 
@@ -451,6 +477,7 @@ class FileNotices:
     location: pathlib.Path
     by_line_number: Mapping[int, protocols.LineNotices] = dataclasses.field(default_factory=dict)
     name_to_line_number: Mapping[str, int] = dataclasses.field(default_factory=dict)
+    msg_maker: protocols.NoticeMsgMaker = PlainMsg.create
 
     @property
     def has_notices(self) -> bool:
@@ -515,14 +542,18 @@ class FileNotices:
 
         return self.by_line_number[line_number]
 
-    def generate_notices_for_line(self, line_number: int) -> protocols.LineNotices:
+    def generate_notices_for_line(
+        self, line_number: int, *, msg_maker: protocols.NoticeMsgMaker | None = None
+    ) -> protocols.LineNotices:
         """
         Return an object that satisfies :protocol:`pytest_typing_runner.protocols.LineNotices`
         for the location of this file at the specified line number.
 
         This object is not added to this file notices
         """
-        return LineNotices(location=self.location, line_number=line_number)
+        if msg_maker is None:
+            msg_maker = self.msg_maker
+        return LineNotices(location=self.location, line_number=line_number, msg_maker=msg_maker)
 
     def set_name(self, name: str, line_number: int) -> Self:
         """
@@ -608,6 +639,7 @@ class ProgramNotices:
     """
 
     notices: Mapping[pathlib.Path, protocols.FileNotices] = dataclasses.field(default_factory=dict)
+    msg_maker: protocols.NoticeMsgMaker = PlainMsg.create
 
     @property
     def has_notices(self) -> bool:
@@ -689,7 +721,12 @@ class ProgramNotices:
         """
         return self.notices.get(location)
 
-    def generate_notices_for_location(self, location: pathlib.Path) -> protocols.FileNotices:
+    def generate_notices_for_location(
+        self,
+        location: pathlib.Path,
+        *,
+        msg_maker: protocols.NoticeMsgMaker | None = None,
+    ) -> protocols.FileNotices:
         """
         Return an object that satisfies :protocol:`pytest_typing_runner.protocols.FileNotices`
 
@@ -697,7 +734,9 @@ class ProgramNotices:
 
         :param location: The value set on the FileNotices for ``location``
         """
-        return FileNotices(location=location)
+        if msg_maker is None:
+            msg_maker = self.msg_maker
+        return FileNotices(location=location, msg_maker=msg_maker)
 
     def set_files(self, notices: Mapping[pathlib.Path, protocols.FileNotices | None]) -> Self:
         """
@@ -1106,7 +1145,7 @@ class RemoveFromRevealedType:
             replaced: list[protocols.ProgramNotice | None] = []
             for notice in notices:
                 if notice.is_type_reveal:
-                    if self.remove in notice.msg:
+                    if self.remove in notice.msg.raw:
                         found = True
                         notice = notice.clone(msg=notice.msg.replace(self.remove, ""))
                 replaced.append(notice)

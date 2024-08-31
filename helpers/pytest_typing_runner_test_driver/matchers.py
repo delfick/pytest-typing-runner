@@ -23,6 +23,8 @@ class MatchNotice:
     def __init__(self, **check: Unpack[_Compare]) -> None:
         assert check, "Must have at least one property to check"
         self._check = check
+        if isinstance(msg := self._check.get("msg"), str):
+            self._check["msg"] = notices.PlainMsg.create(pattern=msg)
         self.missing_attr: set[str] = set()
         self.wrong_attr: dict[str, tuple[object, object]] = {}
 

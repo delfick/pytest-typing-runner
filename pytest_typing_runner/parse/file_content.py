@@ -443,7 +443,9 @@ class InstructionParser:
                         matcher=matcher,
                         change=lambda notice: notice.clone(
                             severity=match.severity,
-                            msg="\n".join([*(() if not notice.msg else (notice.msg,)), match.msg]),
+                            msg="\n".join(
+                                [*(() if not notice.msg.raw else (notice.msg.raw,)), match.msg]
+                            ),
                         ),
                     )
                 )
