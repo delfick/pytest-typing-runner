@@ -927,7 +927,7 @@ class AddErrors:
     """
 
     name: str
-    errors: Sequence[tuple[str, str]]
+    errors: Sequence[tuple[str, str | protocols.NoticeMsg]]
     replace: bool = False
 
     def __call__(self, notices: protocols.FileNotices) -> protocols.FileNotices:
@@ -1045,7 +1045,7 @@ class AddNotes:
     """
 
     name: str
-    notes: Sequence[str]
+    notes: Sequence[str | protocols.NoticeMsg]
     replace: bool = False
     keep_reveals: bool = True
 
@@ -1064,7 +1064,11 @@ class AddNotes:
         def make_notices(
             notices: protocols.LineNotices, /
         ) -> Sequence[protocols.ProgramNotice | None]:
-            return [notices.generate_notice(severity=NoteSeverity(), msg="\n".join(self.notes))]
+            notes = self.notes
+            if all(isinstance(note, str) for note in notes):
+                notes = ["\n".join(str(note) for note in self.notes)]
+
+            return [notices.generate_notice(severity=NoteSeverity(), msg=note) for note in notes]
 
         def change(notices: protocols.LineNotices, /) -> protocols.LineNotices | None:
             if self.replace:

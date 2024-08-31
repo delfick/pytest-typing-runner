@@ -444,7 +444,11 @@ class BulkAdd:
 
     root_dir: pathlib.Path
     add: Mapping[
-        str, Mapping[int | tuple[int, str], Sequence[str | tuple[protocols.Severity, str]]]
+        str,
+        Mapping[
+            int | tuple[int, str],
+            Sequence[str | protocols.NoticeMsg | tuple[protocols.Severity, str]],
+        ],
     ]
 
     def __call__(self, notices: protocols.ProgramNotices) -> protocols.ProgramNotices:

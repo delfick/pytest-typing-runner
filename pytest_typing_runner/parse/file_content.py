@@ -435,6 +435,9 @@ class InstructionParser:
                     if notice.severity == notices.ErrorSeverity("") or notice.is_type_reveal:
                         skip = True
                         return False
+                    if not notice.msg.is_plain:
+                        skip = True
+                        return False
                     return notice.severity == notices.NoteSeverity()
 
                 changers.append(

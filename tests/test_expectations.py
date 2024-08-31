@@ -281,22 +281,31 @@ class TestCompareNotices:
         expectations.compare_notices(diff)
 
     def test_it_shows_what_is_same_and_not_same_when_is_different(self) -> None:
-        def note(path: str, line_number: int, msg: str) -> protocols.ProgramNotice:
+        def note(
+            path: str,
+            line_number: int,
+            msg: str,
+            msg_maker: protocols.NoticeMsgMaker = notices.PlainMsg.create,
+        ) -> protocols.ProgramNotice:
             return notices.ProgramNotice.create(
                 location=pathlib.Path(path),
                 line_number=line_number,
                 severity=notices.NoteSeverity(),
-                msg=msg,
+                msg=msg_maker(pattern=msg),
             )
 
         def error(
-            path: str, line_number: int, error_type: str, msg: str
+            path: str,
+            line_number: int,
+            error_type: str,
+            msg: str,
+            msg_maker: protocols.NoticeMsgMaker = notices.PlainMsg.create,
         ) -> protocols.ProgramNotice:
             return notices.ProgramNotice.create(
                 location=pathlib.Path(path),
                 line_number=line_number,
                 severity=notices.ErrorSeverity(error_type),
-                msg=msg,
+                msg=msg_maker(pattern=msg),
             )
 
         diff = notices.DiffNotices(
@@ -326,6 +335,20 @@ class TestCompareNotices:
                             ],
                             [
                                 error(path, line_number, "arg-type", "hi"),
+                            ],
+                        ),
+                        (line_number := 10): (
+                            [
+                                note(path, line_number, "four"),
+                                note(path, line_number, "fur"),
+                            ],
+                            [
+                                note(
+                                    path, line_number, "f.{2}r", msg_maker=notices.RegexMsg.create
+                                ),
+                                note(
+                                    path, line_number, "f.{2}r", msg_maker=notices.RegexMsg.create
+                                ),
                             ],
                         ),
                     },
@@ -395,6 +418,10 @@ class TestCompareNotices:
           | ✓ severity=error[arg-type]:: hi
           | ✘ !! GOT  !! severity=error[assignment]:: three
           |   !! WANT !! <NONE>
+          | ✘ 10:
+          | ✓ severity=note:: four
+          | ✘ !! GOT  !! severity=note:: fur
+          |   !! WANT !! severity=note:: f.{2}r
         > three
           | ✘ 20:
           | ✘ !! GOT  !! <NONE>
