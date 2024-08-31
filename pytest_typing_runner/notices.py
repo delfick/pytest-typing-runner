@@ -288,6 +288,18 @@ class ProgramNotice:
     msg: str
 
     @classmethod
+    def create(
+        cls,
+        *,
+        location: pathlib.Path,
+        line_number: int,
+        severity: protocols.Severity,
+        msg: str,
+        col: int | None = None,
+    ) -> Self:
+        return cls(location=location, line_number=line_number, severity=severity, msg=msg, col=col)
+
+    @classmethod
     def reveal_msg(cls, revealed: str, /) -> str:
         """
         Helper to get a string that represents the ``msg`` on a note for a ``reveal_type(...)`` instruction
@@ -417,7 +429,7 @@ class LineNotices:
         """
         if severity is None:
             severity = NoteSeverity()
-        return ProgramNotice(
+        return ProgramNotice.create(
             location=self.location,
             line_number=self.line_number,
             severity=severity,
