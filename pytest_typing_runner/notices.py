@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import abc
 import dataclasses
+import fnmatch
 import pathlib
+import re
 from collections import defaultdict
 from collections.abc import Iterator, Mapping, Sequence
-from typing import TYPE_CHECKING, Literal, cast, overload
+from typing import TYPE_CHECKING, ClassVar, Literal, cast, overload
 
 from typing_extensions import Self, Unpack
 
@@ -104,7 +107,167 @@ class ErrorSeverity:
         return self.display < other.display
 
 
-@dataclasses.dataclass(kw_only=True)
+class NoticeMsgBase(abc.ABC):
+    """
+    A notice msg that compares by treating the msg as a plain string
+    """
+
+    raw: str
+
+    def __init__(self, raw: str, /) -> None:
+        self.raw = raw
+
+    def __str__(self) -> str:
+        return str(self.raw)
+
+    def __repr__(self) -> str:
+        return repr(self.raw)
+
+    def __eq__(self, o: object, /) -> bool:
+        return o == self.raw
+
+    def __lt__(self, o: protocols.NoticeMsg, /) -> bool:
+        return self.raw < o.raw
+
+    def __hash__(self) -> int:
+        return hash(self.raw)
+
+    def replace(self, old: str, new: str, count: int = -1, /) -> Self:
+        return self.clone(pattern=self.raw.replace(old, new, count))
+
+    @property
+    @abc.abstractmethod
+    def is_plain(self) -> bool: ...
+
+    @classmethod
+    @abc.abstractmethod
+    def create(cls, *, pattern: str) -> Self: ...
+
+    @abc.abstractmethod
+    def match(self, *, want: str) -> bool: ...
+
+    @abc.abstractmethod
+    def clone(self, *, pattern: str) -> Self: ...
+
+    def split_lines(self) -> Iterator[Self]:
+        if "\n" not in self.raw:
+            yield self
+        else:
+            for line in self.raw.split("\n"):
+                yield self.clone(pattern=line)
+
+
+class PlainMsg(NoticeMsgBase):
+    """
+    A notice msg that compares by treating the msg as a plain string
+
+    .. code-block:: python
+
+        from pytest_typing_runner import notices
+
+        msg = notices.PlainMsg.create(pattern='Revealed type is "stuff"')
+    """
+
+    is_plain: ClassVar[bool] = True
+
+    @classmethod
+    def create(cls, *, pattern: str) -> Self:
+        """
+        Used to construct a GlobMsg
+
+        Implements :protocol:`NoticeMsgMaker`
+        """
+        return cls(pattern)
+
+    def match(self, *, want: str) -> bool:
+        """
+        Returns whether this msg exactly matches the wanted string.
+        """
+        return self == want
+
+    def clone(self, *, pattern: str) -> Self:
+        """
+        Returns an instance of PlainMsg using the provided ``pattern``
+        """
+        return self.create(pattern=pattern)
+
+
+class RegexMsg(NoticeMsgBase):
+    """
+    A notice msg that compares by treating the msg as a regex pattern
+
+    .. code-block:: python
+
+        from pytest_typing_runner import notices
+
+        msg = notices.RegexMsg.create(pattern='Revealed type is "[^"]+"')
+    """
+
+    regex: re.Pattern[str]
+    is_plain: ClassVar[bool] = False
+
+    def __init__(self, raw: str, /) -> None:
+        super().__init__(raw)
+        self.regex = re.compile(str(self))
+
+    @classmethod
+    def create(cls, *, pattern: str) -> Self:
+        """
+        Used to construct a RegexMsg
+
+        Implements :protocol:`NoticeMsgMaker`
+        """
+        return cls(pattern)
+
+    def match(self, *, want: str) -> bool:
+        """
+        Returns whether this msg successfully performs a regex match on the wanted string.
+        """
+        return self.regex.match(want) is not None
+
+    def clone(self, *, pattern: str) -> Self:
+        """
+        Returns an instance of RegexMsg using the provided ``pattern``
+        """
+        return self.create(pattern=pattern)
+
+
+class GlobMsg(NoticeMsgBase):
+    """
+    A notice msg that compares by treating the msg as a glob pattern
+
+    .. code-block:: python
+
+        from pytest_typing_runner import notices
+
+        msg = notices.RegexMsg.create(pattern='Revealed type is "*"')
+    """
+
+    is_plain: ClassVar[bool] = False
+
+    @classmethod
+    def create(cls, *, pattern: str) -> Self:
+        """
+        Used to construct a GlobMsg
+
+        Implements :protocol:`NoticeMsgMaker`
+        """
+        return cls(pattern)
+
+    def match(self, *, want: str) -> bool:
+        """
+        Returns whether this msg successfully performs a glob match on the wanted string.
+        """
+        return fnmatch.fnmatch(want, str(self))
+
+    def clone(self, *, pattern: str) -> Self:
+        """
+        Returns an instance of GlobMsg using the provided ``pattern``
+        """
+        return self.create(pattern=pattern)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class ProgramNotice:
     """
     Represents a single notice from the static type checker
@@ -962,3 +1125,10 @@ if TYPE_CHECKING:
 
     _NS: protocols.Severity = cast(NoteSeverity, None)
     _ES: protocols.Severity = cast(ErrorSeverity, None)
+
+    _EC: protocols.NoticeMsg = cast(PlainMsg, None)
+    _ECM: protocols.NoticeMsgMaker = PlainMsg.create
+    _RC: protocols.NoticeMsg = cast(RegexMsg, None)
+    _RCM: protocols.NoticeMsgMaker = RegexMsg.create
+    _GC: protocols.NoticeMsg = cast(GlobMsg, None)
+    _GCM: protocols.NoticeMsgMaker = GlobMsg.create

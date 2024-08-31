@@ -458,6 +458,54 @@ class ProgramNoticeChanger(Protocol):
     def __call__(self, notice: ProgramNotice, /) -> ProgramNotice | None: ...
 
 
+class NoticeMsg(Protocol):
+    """
+    Used to represent the message on a notice and the ability to compare with other messages
+    """
+
+    raw: str
+
+    def __str__(self) -> str: ...
+    def __eq__(self, o: object, /) -> bool: ...
+    def __hash__(self) -> int: ...
+    def __lt__(self, o: NoticeMsg, /) -> bool: ...
+
+    @property
+    def is_plain(self) -> bool:
+        """
+        Whether this msg does no pattern matching
+        """
+
+    def replace(self, old: str, new: str, count: int = -1) -> Self:
+        """
+        A shortcut for ``msg.clone(raw=msg.raw.replace(old, new, count))``
+        """
+
+    def match(self, *, want: str) -> bool:
+        """
+        :param want: The string to match against
+        :returns: True if ``want`` matches some expectation
+        """
+
+    def clone(self, *, pattern: str) -> Self:
+        """
+        Used to create a version of this msg class but for a different msg
+        """
+
+    def split_lines(self) -> Iterator[Self]:
+        """
+        Yield copies of this notice with a clone per line
+        """
+
+
+class NoticeMsgMaker(Protocol):
+    """
+    Used to create a NoticeMsg
+    """
+
+    def __call__(self, *, pattern: str) -> NoticeMsg: ...
+
+
 class ProgramNoticeCloneKwargs(TypedDict):
     line_number: NotRequired[int]
     col: NotRequired[int | None]
@@ -956,6 +1004,9 @@ if TYPE_CHECKING:
     P_LineNoticesChanger = FileNoticesChanger
     P_ProgramNoticeChanger = ProgramNoticeChanger
     P_ProgramNoticesChanger = ProgramNoticesChanger
+
+    P_NoticeMsg = NoticeMsg
+    P_NoticeMsgMaker = NoticeMsgMaker
 
     P_DiffNotices = DiffNotices
     P_DiffFileNotices = DiffFileNotices
