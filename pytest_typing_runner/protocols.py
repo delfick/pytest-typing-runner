@@ -510,7 +510,10 @@ class ProgramNoticeCloneKwargs(TypedDict):
     line_number: NotRequired[int]
     col: NotRequired[int | None]
     severity: NotRequired[Severity]
-    msg: NotRequired[str]
+
+
+class ProgramNoticeCloneAndMsgKwargs(ProgramNoticeCloneKwargs):
+    msg: NotRequired[str | NoticeMsg]
 
 
 class ProgramNotice(Protocol):
@@ -543,7 +546,7 @@ class ProgramNotice(Protocol):
         """
 
     @property
-    def msg(self) -> str:
+    def msg(self) -> NoticeMsg:
         """
         The message attached to the notice, dedented and including newlines
         """
@@ -554,7 +557,9 @@ class ProgramNotice(Protocol):
         Returns whether this notice represents output from a `reveal_type(...)` instruction
         """
 
-    def clone(self, **kwargs: Unpack[ProgramNoticeCloneKwargs]) -> Self:
+    def clone(
+        self, *, msg: str | NoticeMsg | None = None, **kwargs: Unpack[ProgramNoticeCloneKwargs]
+    ) -> Self:
         """
         Return a clone with specific changes
         """
@@ -616,6 +621,12 @@ class LineNotices(Protocol):
         Whether this has any notices
         """
 
+    @property
+    def msg_maker(self) -> NoticeMsgMaker:
+        """
+        Implementations should use this when generating a program notice
+        """
+
     def __iter__(self) -> Iterator[ProgramNotice]:
         """
         Yield all the notices
@@ -642,7 +653,12 @@ class LineNotices(Protocol):
         """
 
     def generate_notice(
-        self, *, msg: str, severity: Severity | None = None, col: int | None = None
+        self,
+        *,
+        msg: str | NoticeMsg,
+        msg_maker: NoticeMsgMaker | None = None,
+        severity: Severity | None = None,
+        col: int | None = None,
     ) -> ProgramNotice:
         """
         Generate a notice for this location and line
@@ -679,6 +695,12 @@ class FileNotices(Protocol):
         Yield the line numbers that have line notices
         """
 
+    @property
+    def msg_maker(self) -> NoticeMsgMaker:
+        """
+        Implementations should pass this on when generating a line notices
+        """
+
     def __iter__(self) -> Iterator[ProgramNotice]:
         """
         Yield all the notices
@@ -695,7 +717,9 @@ class FileNotices(Protocol):
         Return the line notices for a specific line number if there are any
         """
 
-    def generate_notices_for_line(self, line_number: int) -> LineNotices:
+    def generate_notices_for_line(
+        self, line_number: int, *, msg_maker: NoticeMsgMaker | None = None
+    ) -> LineNotices:
         """
         Return a line notices for this location at the specified line
 
@@ -746,6 +770,12 @@ class ProgramNotices(Protocol):
         Yield all the notices
         """
 
+    @property
+    def msg_maker(self) -> NoticeMsgMaker:
+        """
+        Implementations should pass this on when generating a file notices
+        """
+
     def known_locations(self) -> Iterator[pathlib.Path]:
         """
         Yield locations that have associated file notices
@@ -766,7 +796,9 @@ class ProgramNotices(Protocol):
         Return a copy with these notices for the specified files
         """
 
-    def generate_notices_for_location(self, location: pathlib.Path) -> FileNotices:
+    def generate_notices_for_location(
+        self, location: pathlib.Path, *, msg_maker: NoticeMsgMaker | None = None
+    ) -> FileNotices:
         """
         Return a file notices for this location
 
@@ -919,7 +951,9 @@ class ScenarioRunner(Protocol[T_Scenario]):
         Used to normalise each notice parsed from the output of the program runner
         """
 
-    def generate_program_notices(self) -> ProgramNotices:
+    def generate_program_notices(
+        self, *, msg_maker: NoticeMsgMaker | None = None
+    ) -> ProgramNotices:
         """
         Return an object that satisfies an empty :protocol:`ProgramNotices`
         """

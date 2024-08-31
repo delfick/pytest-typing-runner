@@ -8,9 +8,15 @@ class TestLineNotices:
         line_notices = notices.LineNotices(location=tmp_path, line_number=2)
         assert line_notices.location == tmp_path
         assert line_notices.line_number == 2
+        assert line_notices.msg_maker == notices.PlainMsg.create
 
         assert not line_notices.has_notices
         assert list(line_notices) == []
+
+        line_notices = notices.LineNotices(
+            location=tmp_path, line_number=3, msg_maker=notices.GlobMsg.create
+        )
+        assert line_notices.msg_maker == notices.GlobMsg.create
 
     def test_it_knows_if_it_can_have_notices(self, tmp_path: pathlib.Path) -> None:
         line_notices: protocols.LineNotices | None = notices.LineNotices(
@@ -82,6 +88,7 @@ class TestLineNotices:
         assert n1.severity == notices.NoteSeverity()
         assert n1.msg == "n1"
         assert n1.col is None
+        assert isinstance(n1.msg, notices.PlainMsg)
 
         n2 = line_notices.generate_notice(msg="n2", severity=notices.ErrorSeverity("arg-type"))
         assert n2.location == tmp_path
@@ -89,6 +96,7 @@ class TestLineNotices:
         assert n2.severity == notices.ErrorSeverity("arg-type")
         assert n2.msg == "n2"
         assert n2.col is None
+        assert isinstance(n2.msg, notices.PlainMsg)
 
         n3 = line_notices.generate_notice(msg="other")
         assert n3.location == tmp_path
@@ -96,14 +104,46 @@ class TestLineNotices:
         assert n3.severity == notices.NoteSeverity()
         assert n3.msg == "other"
         assert n3.col is None
+        assert isinstance(n3.msg, notices.PlainMsg)
+
+        n4 = line_notices.generate_notice(msg="stuff", msg_maker=notices.RegexMsg.create)
+        assert n4.location == tmp_path
+        assert n4.line_number == 2
+        assert n4.severity == notices.NoteSeverity()
+        assert n4.msg == "stuff"
+        assert n4.col is None
+        assert isinstance(n4.msg, notices.RegexMsg)
+
+        line_notices = notices.LineNotices(
+            location=tmp_path, line_number=3, msg_maker=notices.GlobMsg.create
+        )
+        n5 = line_notices.generate_notice(msg="n5")
+        assert n5.location == tmp_path
+        assert n5.line_number == 3
+        assert n5.severity == notices.NoteSeverity()
+        assert n5.msg == "n5"
+        assert n5.col is None
+        assert isinstance(n5.msg, notices.GlobMsg)
+
+        n6 = line_notices.generate_notice(msg="n6", msg_maker=notices.PlainMsg.create)
+        assert n6.location == tmp_path
+        assert n6.line_number == 3
+        assert n6.severity == notices.NoteSeverity()
+        assert n6.msg == "n6"
+        assert n6.col is None
+        assert isinstance(n6.msg, notices.PlainMsg)
 
 
 class TestFileNotices:
     def test_it_has_properties(self, tmp_path: pathlib.Path) -> None:
         file_notices = notices.FileNotices(location=tmp_path)
         assert file_notices.location == tmp_path
+        assert file_notices.msg_maker == notices.PlainMsg.create
         assert not file_notices.has_notices
         assert list(file_notices) == []
+
+        file_notices = notices.FileNotices(location=tmp_path, msg_maker=notices.GlobMsg.create)
+        assert file_notices.msg_maker == notices.GlobMsg.create
 
     def test_it_can_get_known_names(self, tmp_path: pathlib.Path) -> None:
         file_notices = notices.FileNotices(location=tmp_path)
@@ -112,6 +152,27 @@ class TestFileNotices:
             "one": 1,
             "two": 2,
         }
+
+    def test_it_can_generate_line_notices(self, tmp_path: pathlib.Path) -> None:
+        file_notices = notices.FileNotices(location=tmp_path)
+        line_notices = file_notices.generate_notices_for_line(3)
+        assert line_notices.location == tmp_path
+        assert line_notices.msg_maker == notices.PlainMsg.create
+        assert line_notices.line_number == 3
+        assert file_notices.notices_at_line(3) is None
+
+        file_notices = notices.FileNotices(location=tmp_path, msg_maker=notices.GlobMsg.create)
+        line_notices = file_notices.generate_notices_for_line(3)
+        assert line_notices.location == tmp_path
+        assert line_notices.msg_maker == notices.GlobMsg.create
+        assert line_notices.line_number == 3
+        assert file_notices.notices_at_line(3) is None
+
+        line_notices = file_notices.generate_notices_for_line(3, msg_maker=notices.RegexMsg.create)
+        assert line_notices.location == tmp_path
+        assert line_notices.msg_maker == notices.RegexMsg.create
+        assert line_notices.line_number == 3
+        assert file_notices.notices_at_line(3) is None
 
     def test_it_can_get_known_line_numbers(self, tmp_path: pathlib.Path) -> None:
         file_notices = notices.FileNotices(location=tmp_path)
@@ -429,3 +490,23 @@ class TestProgramNotices:
             }
         )
         assert list(program_notices.known_locations()) == [fn1.location, fn2.location]
+
+    def test_it_can_generate_file_notices(self, tmp_path: pathlib.Path) -> None:
+        program_notices = notices.ProgramNotices()
+        file_notices = program_notices.generate_notices_for_location(tmp_path)
+        assert file_notices.location == tmp_path
+        assert file_notices.msg_maker == notices.PlainMsg.create
+        assert program_notices.notices_at_location(tmp_path) is None
+
+        program_notices = notices.ProgramNotices(msg_maker=notices.GlobMsg.create)
+        file_notices = program_notices.generate_notices_for_location(tmp_path)
+        assert file_notices.location == tmp_path
+        assert file_notices.msg_maker == notices.GlobMsg.create
+        assert program_notices.notices_at_location(tmp_path) is None
+
+        file_notices = program_notices.generate_notices_for_location(
+            tmp_path, msg_maker=notices.RegexMsg.create
+        )
+        assert file_notices.location == tmp_path
+        assert file_notices.msg_maker == notices.RegexMsg.create
+        assert program_notices.notices_at_location(tmp_path) is None

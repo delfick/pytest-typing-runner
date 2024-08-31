@@ -70,7 +70,9 @@ class TestMatchNote:
         notice = notice.clone(severity=notices.NoteSeverity())
 
         combinations: list[
-            tuple[matchers.MatchNote._Compare, protocols.ProgramNoticeCloneKwargs | None, bool]
+            tuple[
+                matchers.MatchNote._Compare, protocols.ProgramNoticeCloneAndMsgKwargs | None, bool
+            ]
         ] = [
             ({"msg": "hello"}, None, True),
             (

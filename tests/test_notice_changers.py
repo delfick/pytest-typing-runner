@@ -139,7 +139,8 @@ class TestModifyLatestMatch:
         assert [
             n.msg
             for n in notice_changers.ModifyLatestMatch(
-                change=lambda n: n.clone(msg="changed!"), matcher=lambda n: n.msg.startswith("s")
+                change=lambda n: n.clone(msg="changed!"),
+                matcher=lambda n: n.msg.raw.startswith("s"),
             )(line_notices.set_notices([n1, n2, s1, d1, s2, n3], allow_empty=True))
             or []
         ] == ["n1", "n2", "s1", "d1", "changed!", "n3"]
@@ -147,7 +148,8 @@ class TestModifyLatestMatch:
         assert [
             n.msg
             for n in notice_changers.ModifyLatestMatch(
-                change=lambda n: n.clone(msg="changed!"), matcher=lambda n: n.msg.startswith("s")
+                change=lambda n: n.clone(msg="changed!"),
+                matcher=lambda n: n.msg.raw.startswith("s"),
             )(line_notices.set_notices([n1, n2, s1, d1, n3], allow_empty=True))
             or []
         ] == ["n1", "n2", "changed!", "d1", "n3"]
@@ -162,7 +164,8 @@ class TestModifyLatestMatch:
         assert [
             n.msg
             for n in notice_changers.ModifyLatestMatch(
-                change=lambda n: n.clone(msg="changed!"), matcher=lambda n: n.msg.startswith("s")
+                change=lambda n: n.clone(msg="changed!"),
+                matcher=lambda n: n.msg.raw.startswith("s"),
             )(line_notices.set_notices([n1, n2, n3], allow_empty=True))
             or []
         ] == ["n1", "n2", "n3", "changed!"]
@@ -178,7 +181,7 @@ class TestModifyLatestMatch:
             assert notice_changers.ModifyLatestMatch(
                 must_exist=True,
                 change=lambda n: n.clone(msg="changed!"),
-                matcher=lambda n: n.msg.startswith("s"),
+                matcher=lambda n: n.msg.raw.startswith("s"),
             )(line_notices.set_notices([n1, n2, n3], allow_empty=True))
 
         assert e.value.location == line_notices.location
@@ -190,7 +193,7 @@ class TestModifyLatestMatch:
         assert (
             notice_changers.ModifyLatestMatch(
                 change=lambda n: None,
-                matcher=lambda n: n.msg.startswith("n"),
+                matcher=lambda n: n.msg.raw.startswith("n"),
             )(line_notices.set_notices([n1], allow_empty=True))
             is None
         )
@@ -198,7 +201,7 @@ class TestModifyLatestMatch:
         changed = notice_changers.ModifyLatestMatch(
             allow_empty=True,
             change=lambda n: None,
-            matcher=lambda n: n.msg.startswith("n"),
+            matcher=lambda n: n.msg.raw.startswith("n"),
         )(line_notices.set_notices([n1], allow_empty=True))
         assert changed is not None
         assert list(changed) == []
@@ -206,7 +209,7 @@ class TestModifyLatestMatch:
         changed = notice_changers.ModifyLatestMatch(
             allow_empty=True,
             change=lambda n: None,
-            matcher=lambda n: n.msg.startswith("n"),
+            matcher=lambda n: n.msg.raw.startswith("n"),
         )(line_notices.set_notices([], allow_empty=True))
         assert changed is not None
         assert list(changed) == []
@@ -214,7 +217,7 @@ class TestModifyLatestMatch:
         assert (
             notice_changers.ModifyLatestMatch(
                 change=lambda n: None,
-                matcher=lambda n: n.msg.startswith("n"),
+                matcher=lambda n: n.msg.raw.startswith("n"),
             )(line_notices.set_notices([], allow_empty=True))
             is None
         )

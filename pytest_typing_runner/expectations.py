@@ -102,11 +102,12 @@ def normalise_notices(
     ```
     """
     for notice in sorted(notices):
-        if "\n" in notice.msg:
-            for line in notice.msg.split("\n"):
-                yield notice.clone(msg=line)
-        else:
+        split = list(notice.msg.split_lines())
+        if len(split) == 1:
             yield notice
+        else:
+            for msg in split:
+                yield notice.clone(msg=msg)
 
 
 def compare_notices(diff: protocols.DiffNotices) -> None:
