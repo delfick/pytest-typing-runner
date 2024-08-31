@@ -39,7 +39,16 @@ class MatchNotice:
                 left = getattr(o, attr)
                 if attr == "display" and callable(left):
                     left = left()
-                if left != right:
+
+                if attr == "msg" and not isinstance(left, str) and right is not None:
+                    want = right
+                    if not isinstance(want, str):
+                        raw = getattr(want, "raw", None)
+                        assert isinstance(raw, str)
+                        want = raw
+                    if not left.match(want=want):
+                        self.wrong_attr[attr] = (left, right)
+                elif left != right:
                     self.wrong_attr[attr] = (left, right)
 
         return not self.missing_attr and not self.wrong_attr

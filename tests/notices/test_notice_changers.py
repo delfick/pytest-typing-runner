@@ -121,7 +121,12 @@ class TestAddErrors:
 
         changer = notices.AddErrors(
             name="one",
-            errors=[("misc", "one"), ("misc", "two"), ("arg-type", "three")],
+            errors=[
+                ("misc", "one"),
+                ("misc", "two"),
+                ("arg-type", "three"),
+                ("assignment", notices.RegexMsg.create(pattern="stuff .+")),
+            ],
             replace=False,
         )
 
@@ -146,6 +151,12 @@ class TestAddErrors:
                 line_number=5,
                 severity=notices.ErrorSeverity("arg-type"),
                 msg="three",
+            ),
+            matchers.MatchNotice(
+                location=file_notices.location,
+                line_number=5,
+                severity=notices.ErrorSeverity("assignment"),
+                msg="stuff and things",
             ),
         ]
 
@@ -251,7 +262,34 @@ class TestAddNotes:
 
         file_notices = file_notices.set_name("one", 5).set_lines({5: fn5.set_notices([n1])})
 
-        changer = notices.AddNotes(name="one", notes=["one", "two"], replace=False)
+        changer = notices.AddNotes(
+            name="one",
+            notes=["one", "two", notices.GlobMsg.create(pattern="one * two")],
+            replace=False,
+        )
+
+        changed = changer(file_notices)
+        assert list(file_notices) == [n1]
+        assert list(changed) == [
+            n1,
+            matchers.MatchNote(location=file_notices.location, line_number=5, msg="one"),
+            matchers.MatchNote(location=file_notices.location, line_number=5, msg="two"),
+            matchers.MatchNote(location=file_notices.location, line_number=5, msg="one t two"),
+        ]
+
+    def test_it_collapses_notes_when_all_strings(
+        self, file_notices: protocols.FileNotices
+    ) -> None:
+        fn5 = file_notices.generate_notices_for_line(5)
+        n1 = fn5.generate_notice(msg="n1")
+
+        file_notices = file_notices.set_name("one", 5).set_lines({5: fn5.set_notices([n1])})
+
+        changer = notices.AddNotes(
+            name="one",
+            notes=["one", "two"],
+            replace=False,
+        )
 
         changed = changer(file_notices)
         assert list(file_notices) == [n1]

@@ -483,3 +483,43 @@ class TestBulkAdd:
             ("two/three", 20): "blah",
             ("five", 1): "tree",
         }
+
+        program_notices = notice_changers.BulkAdd(
+            root_dir=tmp_path,
+            add={
+                "with_regex": {
+                    50: [notices.RegexMsg.create(pattern="a{3}")],
+                }
+            },
+        )(program_notices)
+        assert sorted(program_notices) == [
+            matchers.MatchNotice(
+                location=tmp_path / "four",
+                line_number=20,
+                severity=notices.ErrorSeverity("assignment"),
+                msg="e2",
+            ),
+            matchers.MatchNotice(
+                location=tmp_path / "four",
+                line_number=20,
+                severity=notices.ErrorSeverity("var-annotated"),
+                msg="e3",
+            ),
+            matchers.MatchNote(location=tmp_path / "one", line_number=1, msg="hello"),
+            matchers.MatchNote(location=tmp_path / "one", line_number=1, msg="there"),
+            matchers.MatchNotice(
+                location=tmp_path / "one",
+                line_number=2,
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="e1",
+            ),
+            matchers.MatchNote(location=tmp_path / "one", line_number=2, msg="things"),
+            matchers.MatchNote(location=tmp_path / "one", line_number=2, msg="things2"),
+            matchers.MatchNote(location=tmp_path / "two/three", line_number=20, msg="there"),
+            matchers.MatchNote(location=tmp_path / "with_regex", line_number=50, msg="aaa"),
+        ]
+        assert names(program_notices) == {
+            ("one", 2): "other",
+            ("two/three", 20): "blah",
+            ("five", 1): "tree",
+        }
