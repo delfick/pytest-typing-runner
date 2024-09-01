@@ -76,7 +76,13 @@ class LineParser(Protocol):
     the lines or to the notices
     """
 
-    def __call__(self, before: ParsedLineBefore, /) -> ParsedLineAfter: ...
+    def __call__(
+        self,
+        before: ParsedLineBefore,
+        /,
+        *,
+        msg_maker_map: protocols.NoticeMsgMakerMap | None = None,
+    ) -> ParsedLineAfter: ...
 
 
 class CommentMatch(Protocol):
@@ -137,7 +143,9 @@ class CommentMatch(Protocol):
 
 
 class CommentMatchMaker(Protocol):
-    def __call__(self, line: str, /) -> Iterator[CommentMatch]: ...
+    def __call__(
+        self, line: str, /, *, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+    ) -> Iterator[CommentMatch]: ...
 
 
 if TYPE_CHECKING:

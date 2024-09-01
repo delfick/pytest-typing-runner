@@ -355,7 +355,9 @@ class TestInstructionParser:
     def test_it_makes_no_modification_if_no_comment_match(self) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+        def parser(
+            line: str, /, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+        ) -> Iterator[parse.protocols.CommentMatch]:
             return iter([])
 
         after = parse.file_content.InstructionParser(parser=parser).parse(before)
@@ -371,7 +373,9 @@ class TestInstructionParser:
         def modify_lines(*, before: parse.protocols.ParsedLineBefore) -> Iterator[str]:
             yield ""
 
-        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+        def parser(
+            line: str, /, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+        ) -> Iterator[parse.protocols.CommentMatch]:
             assert isinstance(match, parse.file_content.CommentMatch)
             yield dataclasses.replace(match, modify_lines=modify_lines)
 
@@ -384,7 +388,9 @@ class TestInstructionParser:
     def test_it_passes_on_names(self, match: parse.protocols.CommentMatch) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+        def parser(
+            line: str, /, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+        ) -> Iterator[parse.protocols.CommentMatch]:
             assert isinstance(match, parse.file_content.CommentMatch)
             yield dataclasses.replace(match, names=["one"])
 
@@ -397,7 +403,9 @@ class TestInstructionParser:
     def test_it_says_is_real_line_if_not_for_whole_line(self, tmp_path: pathlib.Path) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+        def parser(
+            line: str, /, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+        ) -> Iterator[parse.protocols.CommentMatch]:
             yield parse.file_content.CommentMatch(
                 severity=notices.NoteSeverity(),
                 msg=notices.ProgramNotice.reveal_msg("hi"),
@@ -418,7 +426,9 @@ class TestInstructionParser:
     def test_it_adds_append_changer_for_reveal(self, tmp_path: pathlib.Path) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+        def parser(
+            line: str, /, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+        ) -> Iterator[parse.protocols.CommentMatch]:
             yield parse.file_content.CommentMatch(
                 severity=notices.NoteSeverity(),
                 msg=notices.ProgramNotice.reveal_msg("hi"),
@@ -449,7 +459,9 @@ class TestInstructionParser:
     def test_it_adds_match_latest_matcher_for_note(self, tmp_path: pathlib.Path) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+        def parser(
+            line: str, /, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+        ) -> Iterator[parse.protocols.CommentMatch]:
             yield parse.file_content.CommentMatch(
                 severity=notices.NoteSeverity(),
                 msg="stuff",
@@ -573,7 +585,9 @@ class TestInstructionParser:
     def test_it_adds_append_changer_for_error(self, tmp_path: pathlib.Path) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+        def parser(
+            line: str, /, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+        ) -> Iterator[parse.protocols.CommentMatch]:
             yield parse.file_content.CommentMatch(
                 severity=notices.ErrorSeverity("arg-type"),
                 msg="error",
@@ -606,7 +620,9 @@ class TestInstructionParser:
     def test_it_adds_append_changer_for_warning(self, tmp_path: pathlib.Path) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+        def parser(
+            line: str, /, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+        ) -> Iterator[parse.protocols.CommentMatch]:
             yield parse.file_content.CommentMatch(
                 severity=notices.WarningSeverity(),
                 msg="warn",
@@ -639,7 +655,9 @@ class TestInstructionParser:
     def test_it_otherwise_adds_not_changers(self, tmp_path: pathlib.Path) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
-        def parser(line: str, /) -> Iterator[parse.protocols.CommentMatch]:
+        def parser(
+            line: str, /, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+        ) -> Iterator[parse.protocols.CommentMatch]:
             yield parse.file_content.CommentMatch(
                 severity=notices.NoteSeverity(),
                 is_error=False,

@@ -101,7 +101,9 @@ class InlineCommentMatch(CommentMatch):
         return InstructionParser(parser=cls.match).parse
 
     @classmethod
-    def match(cls, line: str) -> Iterator[Self]:
+    def match(
+        cls, line: str, /, *, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+    ) -> Iterator[Self]:
         """
         Yield a comment match for lines that match an instruction
 
@@ -246,7 +248,9 @@ class InstructionMatch(CommentMatch):
         return InstructionParser(parser=cls.match).parse
 
     @classmethod
-    def match(cls, line: str) -> Iterator[Self]:
+    def match(
+        cls, line: str, /, *, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+    ) -> Iterator[Self]:
         """
         Yield a comment match for lines that match an instruction
 
@@ -361,7 +365,10 @@ class InstructionParser:
     parser: parse_protocols.CommentMatchMaker
 
     def parse(
-        self, before: parse_protocols.ParsedLineBefore, /
+        self,
+        before: parse_protocols.ParsedLineBefore,
+        /,
+        msg_maker_map: protocols.NoticeMsgMakerMap | None = None,
     ) -> parse_protocols.ParsedLineAfter:
         """
         Will run the parser over the latest line and determine notice changers
@@ -382,7 +389,7 @@ class InstructionParser:
         Implementation of :protocol:`pytest_typing_runner.parse.protocols.LineParser`
         """
         line = before.lines[-1]
-        matches = list(self.parser(line))
+        matches = list(self.parser(line, msg_maker_map=msg_maker_map))
         if not any(matches):
             return _ParsedLineAfter(
                 modify_lines=None, notice_changers=[], names=[], real_line=True
@@ -476,10 +483,15 @@ class FileContent:
 
         Defaults to using one parser:
         * :class:`pytest_typing_runner.parse.file_content.InstructionMatch.make_parser`
+    :param msg_maker_map: Map of names to specific msg makers
     """
 
     parsers: Sequence[parse_protocols.LineParser] = dataclasses.field(
         default_factory=lambda: (InstructionMatch.make_parser(), InlineCommentMatch.make_parser())
+    )
+
+    msg_maker_map: protocols.NoticeMsgMakerMap = dataclasses.field(
+        default_factory=notices.NoticeMsgMakerMap
     )
 
     def _modify(
@@ -531,7 +543,7 @@ class FileContent:
             afters: list[parse_protocols.ParsedLineAfter] = []
             for parser in self.parsers:
                 before = _ParsedLineBefore(lines=result, line_number_for_name=line_number_for_name)
-                after = parser(before)
+                after = parser(before, msg_maker_map=self.msg_maker_map)
                 if not after.real_line:
                     real_line = False
 
