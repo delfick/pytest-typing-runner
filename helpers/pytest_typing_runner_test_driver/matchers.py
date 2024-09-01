@@ -41,14 +41,18 @@ class MatchNotice:
                     left = left()
 
                 if attr == "msg" and not isinstance(left, str) and right is not None:
-                    want = right
-                    if not isinstance(want, str):
-                        raw = getattr(want, "raw", None)
-                        assert isinstance(raw, str)
-                        want = raw
-                    if not left.match(want=want):
-                        self.wrong_attr[attr] = (left, right)
-                elif left != right:
+                    if isinstance(right, str):
+                        if not left.match(want=right):
+                            self.wrong_attr[attr] = (left, right)
+                        continue
+                    elif getattr(right, "is_plain", False) and isinstance(
+                        want := getattr(right, "raw", None), str
+                    ):
+                        if not left.match(want=want):
+                            self.wrong_attr[attr] = (left, right)
+                        continue
+
+                if left != right:
                     self.wrong_attr[attr] = (left, right)
 
         return not self.missing_attr and not self.wrong_attr

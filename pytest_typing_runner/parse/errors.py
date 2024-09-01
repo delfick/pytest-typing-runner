@@ -1,4 +1,5 @@
 import dataclasses
+from collections.abc import Sequence
 
 from .. import errors
 
@@ -8,6 +9,22 @@ class InvalidLine(errors.PyTestTypingRunnerException):
     """
     Base exception for problems with parsing lines
     """
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class InvalidMsgMaker(errors.PyTestTypingRunnerException):
+    """
+    Raised when an unknown msg maker is asked for
+    """
+
+    want: str
+    available: Sequence[str] | None
+
+    def __str__(self) -> str:
+        if self.available:
+            return f"Asked for a msg maker that isn't available: want={self.want}, available={', '.join(self.available)}"
+        else:
+            return f"Asked for a msg maker ({self.want}) but none are available to choose from"
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

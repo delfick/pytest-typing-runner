@@ -65,7 +65,7 @@ For example:
     16:
     17: def other() -> None:
     18:     return 1
-    19:     # ^ ERROR(var-annotated) ^ asdf
+    19:     # ^ ERROR(var-annotated)<regex> ^ Need type Blah for "Stuff".+
     20:     # ^ NAME[hi] ^
     21:
     22: if True:
@@ -78,15 +78,26 @@ For example:
 In this example, we are using ``NAME``, ``ERROR``, ``WARNING``, ``REVEAL``
 and ``NOTE`` instructions.
 
-These are of the form:
+These match the form of:
 
-* ``# ^ NAME[name] ^``
-* ``# ^ REVEAL ^ <builtins.int>``
-* ``# ^ REVEAL[name] ^ <builtins.int>``
-* ``# ^ NOTE ^ some note``
-* ``# ^ NOTE[name] ^ some note``
-* ``# ^ ERROR(error-type) ^ some error``
-* ``# ^ ERROR(error-type)[name] ^ some error``
+``# ^ INSTRUCTION(error-type)[name]<match> ^ msg``
+
+Where INSTRUCTION is one of:
+
+* NAME
+* REVEAL
+* ERROR
+* NOTE
+* WARNING
+
+And ``error-type`` is only valid for ``ERROR`` instructions.
+
+The ``name`` is a way of registered a name for that line.
+
+And ``match`` says how to compare ``msg`` in this notice to the ``msg``
+in the notice that was received for this file and line.
+
+The default ``match`` options are ``plain``, ``regex`` and ``glob``.
 
 Where ``REVEAL`` notes are extra special in that they will change the line
 such that it becomes a ``reveal_type(...)``
@@ -121,7 +132,7 @@ So after transformation the above file becomes
     18:
     19: def other() -> None:
     20:     return 1
-    21:     # ^ ERROR(var-annotated) ^ asdf
+    21:     # ^ ERROR(var-annotated) ^ Need type Blah for "Stuff".+
     22:     # ^ NAME[hi] ^
     23:
     24: if True:
@@ -146,7 +157,7 @@ And the following notices are expected:
     11: severity=note:: three
     11: severity=error[assignment]:: another
     11: severity=note:: four
-    20: severity=error[var-annotated]:: asdf
+    20: severity=error[var-annotated]:: Need type Blah for "Stuff".+
     25: severity=error[arg-type]:: hi
     25: severity=note:: Revealed type is "asdf"
     25: severity=note:: Revealed type is "asdf2"
@@ -167,7 +178,7 @@ For example:
     06: reveal_type(a) # N: Revealed type is "stuff" # N: one # N: two # N: three # E: another  [assignment] # N: four
     07:
     08: def other() -> None:
-    09:     return 1 # E: asdf  [var-annotated]
+    09:     return 1 # E<regex>: Need type Blah for "Stuff".+  [var-annotated]
     10:
     11: if True:
     12:     reveal_type(found) # E: hi  [arg-type] # N: Revealed type is "asdf" # N: Revealed type is "asdf2" # E: hi  [arg-type]
@@ -178,6 +189,11 @@ In this example, we are using ``NAME``, ``ERROR``, ``REVEAL`` and ``NOTE``
 
 An optional column number may also be provided after the action. For example
 ``# E:20``.
+
+There may also be a ``<match>`` after the instruction. For example:
+``# N<regex>: Revealed type is "[^"]+"`` where the string within the brackets
+may be ``plain`` for plain equality check, ``regex`` for using the ``msg`` as
+a regular expression, or ``glob`` for using the ``msg`` as a glob.
 
 The rest of the comment till the next un-escaped hash will be considered the
 message for the notice. The ``E`` instruction will also look for the
@@ -198,7 +214,7 @@ And the following notices are expected:
     06: severity=note:: three
     06: severity=error[assignment]:: another
     06: severity=note:: four
-    09: severity=error[var-annotated]:: asdf
+    09: severity=error[var-annotated]:: Need type Blah for "Stuff".+
     12: severity=error[arg-type]:: hi
     12: severity=note:: Revealed type is "asdf"
     12: severity=note:: Revealed type is "asdf2"

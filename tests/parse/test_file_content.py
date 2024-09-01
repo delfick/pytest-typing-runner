@@ -53,6 +53,48 @@ class TestInstructionMatch:
             with pytest.raises(parse.errors.InvalidInstruction):
                 list(parse.file_content.InstructionMatch.match(invalid))
 
+    def test_it_knows_about_msg_makers(self) -> None:
+        msg_maker_map = notices.NoticeMsgMakerMap(
+            makers={"one": notices.RegexMsg.create, "two": notices.GlobMsg.create}
+        )
+
+        for instruction in parse.file_content.InstructionMatch._Instruction:
+            if instruction is parse.file_content.InstructionMatch._Instruction.NAME:
+                continue
+
+            instruction_name = instruction.name
+            if instruction is parse.file_content.InstructionMatch._Instruction.ERROR:
+                instruction_name = f"{instruction_name}(arg-type)"
+
+            if instruction is parse.file_content.InstructionMatch._Instruction.REVEAL:
+                expected = 'Revealed type is "hello"'
+            else:
+                expected = "hello"
+
+            made = list(
+                parse.file_content.InstructionMatch.match(
+                    f"# ^ {instruction_name} ^ hello", msg_maker_map=msg_maker_map
+                )
+            )
+            assert isinstance(made[0].msg, str)
+            assert made[0].msg == expected
+
+            made = list(
+                parse.file_content.InstructionMatch.match(
+                    f"# ^ {instruction_name}<one> ^ hello", msg_maker_map=msg_maker_map
+                )
+            )
+            assert isinstance(made[0].msg, notices.RegexMsg)
+            assert made[0].msg == expected
+
+            made = list(
+                parse.file_content.InstructionMatch.match(
+                    f"# ^ {instruction_name}<two> ^ hello", msg_maker_map=msg_maker_map
+                )
+            )
+            assert isinstance(made[0].msg, notices.GlobMsg)
+            assert made[0].msg == expected
+
     def test_it_captures_note_instructions(self) -> None:
         assert list(parse.file_content.InstructionMatch.match("# ^ NOTE ^ hello")) == [
             parse.file_content.InstructionMatch(
@@ -212,6 +254,39 @@ class TestInlineComment:
             "# N: no code before the line!",
         ]:
             assert list(parse.file_content.InlineCommentMatch.match(code_line)) == []
+
+    def test_it_knows_about_msg_makers(self) -> None:
+        msg_maker_map = notices.NoticeMsgMakerMap(
+            makers={"one": notices.RegexMsg.create, "two": notices.GlobMsg.create}
+        )
+
+        for instruction in parse.file_content.InlineCommentMatch._Instruction:
+            expected = "hello"
+            instruction_name = instruction.name
+
+            made = list(
+                parse.file_content.InlineCommentMatch.match(
+                    f"code # {instruction_name}: hello", msg_maker_map=msg_maker_map
+                )
+            )
+            assert isinstance(made[0].msg, str)
+            assert made[0].msg == expected
+
+            made = list(
+                parse.file_content.InlineCommentMatch.match(
+                    f"code # {instruction_name}<one>: hello", msg_maker_map=msg_maker_map
+                )
+            )
+            assert isinstance(made[0].msg, notices.RegexMsg)
+            assert made[0].msg == expected
+
+            made = list(
+                parse.file_content.InlineCommentMatch.match(
+                    f"code # {instruction_name}<two>: hello", msg_maker_map=msg_maker_map
+                )
+            )
+            assert isinstance(made[0].msg, notices.GlobMsg)
+            assert made[0].msg == expected
 
     def test_it_captures_note_instructions(self) -> None:
         assert list(parse.file_content.InlineCommentMatch.match("code # N: hello")) == [
@@ -456,6 +531,52 @@ class TestInstructionParser:
             )
         ]
 
+    def test_it_appends_if_adding_notice_msg(self, tmp_path: pathlib.Path) -> None:
+        before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
+
+        def parser(
+            line: str, /, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+        ) -> Iterator[parse.protocols.CommentMatch]:
+            yield parse.file_content.CommentMatch(
+                severity=notices.NoteSeverity(),
+                msg=notices.RegexMsg.create(pattern=".+"),
+                names=["two"],
+                is_note=True,
+                is_whole_line=True,
+            )
+
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+
+        assert after.modify_lines is None
+        assert after.names == ["two"]
+        assert not after.real_line
+        assert len(after.notice_changers) == 1
+
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2)
+        assert list(line_notices) == []
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            matchers.MatchNote(
+                location=tmp_path, line_number=2, msg=notices.RegexMsg.create(pattern=".+")
+            )
+        ]
+
+        # Existing notes but adding non str
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+        n1 = line_notices.generate_notice(severity=notices.ErrorSeverity("arg-type"), msg="error1")
+        n2 = line_notices.generate_notice(
+            severity=notices.NoteSeverity(), msg=notices.RegexMsg.create(pattern="note1")
+        )
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2).set_notices(
+            [n1, n2], allow_empty=True
+        )
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            n1,
+            n2,
+            matchers.MatchNote(
+                location=tmp_path, line_number=2, msg=notices.RegexMsg.create(pattern=".+")
+            ),
+        ]
+
     def test_it_adds_match_latest_matcher_for_note(self, tmp_path: pathlib.Path) -> None:
         before = parse.file_content._ParsedLineBefore(lines=[""], line_number_for_name=0)
 
@@ -521,6 +642,26 @@ class TestInstructionParser:
                 msg="error1",
             ),
             matchers.MatchNote(location=tmp_path, line_number=2, msg="note1\nstuff"),
+        ]
+
+        # Existing notes but they aren't plain
+        after = parse.file_content.InstructionParser(parser=parser).parse(before)
+        n1 = line_notices.generate_notice(severity=notices.ErrorSeverity("arg-type"), msg="error1")
+        n2 = line_notices.generate_notice(
+            severity=notices.NoteSeverity(), msg=notices.RegexMsg.create(pattern="note1")
+        )
+        line_notices = notices.LineNotices(location=tmp_path, line_number=2).set_notices(
+            [n1, n2], allow_empty=True
+        )
+        assert list(after.notice_changers[0](line_notices) or []) == [
+            matchers.MatchNotice(
+                location=tmp_path,
+                line_number=2,
+                severity=notices.ErrorSeverity("arg-type"),
+                msg="error1",
+            ),
+            matchers.MatchNote(location=tmp_path, line_number=2, msg="note1"),
+            matchers.MatchNote(location=tmp_path, line_number=2, msg="stuff"),
         ]
 
         # Existing reveal
@@ -897,7 +1038,7 @@ class TestFileContent:
         02: model: type[Leader] = Follow1
         03: # ^ ERROR(arg-type) ^ an error
         04: # ^ ERROR(arg-type) ^ more
-        05: # ^ ERROR(assignment) ^ another
+        05: # ^ ERROR(assignment)<regex> ^ another.+
         06: 
         07:
         08: if True:
@@ -929,7 +1070,7 @@ class TestFileContent:
                     location=location,
                     line_number=2,
                     severity=notices.ErrorSeverity("assignment"),
-                    msg="another",
+                    msg=notices.RegexMsg.create(pattern="another.+"),
                 ),
             ]
             notices_at_9 = [
@@ -1052,7 +1193,7 @@ class TestFileContent:
         10: # ^ REVEAL[two] ^ Union[type[simple.models.Follow1], type[simple.models.Follow2]]
         11:
         12: reveal_type(found)
-        13: # ^ REVEAL[three] ^ Union[type[simple.models.Follow1], type[simple.models.Follow2]]
+        13: # ^ REVEAL[three]<glob> ^ Union[type[simple.models.*], type[simple.models.*]]
         14:
         15: if True:
         16:     reveal_type(found)
@@ -1081,7 +1222,7 @@ class TestFileContent:
         12: # ^ REVEAL[two] ^ Union[type[simple.models.Follow1], type[simple.models.Follow2]]
         13:
         14: reveal_type(found)
-        15: # ^ REVEAL[three] ^ Union[type[simple.models.Follow1], type[simple.models.Follow2]]
+        15: # ^ REVEAL[three]<glob> ^ Union[type[simple.models.*], type[simple.models.*]]
         16:
         17: if True:
         18:     reveal_type(found)
@@ -1123,8 +1264,10 @@ class TestFileContent:
                 matchers.MatchNote(
                     location=location,
                     line_number=14,
-                    msg=notices.ProgramNotice.reveal_msg(
-                        "Union[type[simple.models.Follow1], type[simple.models.Follow2]]"
+                    msg=notices.GlobMsg.create(
+                        pattern=notices.ProgramNotice.reveal_msg(
+                            "Union[type[simple.models.*], type[simple.models.*]]"
+                        )
                     ),
                 )
             ]
@@ -1349,7 +1492,7 @@ class TestFileContent:
         original = _without_line_numbers("""
         01: a: int = 1
         02: model: type[Leader] = Follow1 
-        03: reveal_type(model) # N: Revealed type is "one" # E: an error  [arg-type] # E: more  [arg-type] # E: another  [assignment]
+        03: reveal_type(model) # N: Revealed type is "one" # E: an error  [arg-type] # E<regex>: more.*  [arg-type] # E: another  [assignment]
         04: 
         05: a: int = "asdf" # E: other  [assignment]
         06: reveal_type(a) # N: Revealed type is "stuff" # N: one # N: two # N: three # E: another  [assignment] # N: four
@@ -1380,7 +1523,7 @@ class TestFileContent:
                     location=location,
                     line_number=3,
                     severity=notices.ErrorSeverity("arg-type"),
-                    msg="more",
+                    msg=notices.RegexMsg.create(pattern="more.*"),
                 ),
                 matchers.MatchNotice(
                     location=location,
@@ -1472,7 +1615,7 @@ class TestFileContent:
     def test_it_can_parse_inline_comments_combined_with_instruction_comments(
         self, tmp_path: pathlib.Path, parser: protocols.FileNoticesParser
     ) -> None:
-        original = _without_line_numbers("""
+        original = _without_line_numbers(r"""
         01: a: int = 1
         02: model: type[Leader] = Follow1 
         03: reveal_type(model) # N: Revealed type is "one" # E: an error  [arg-type] # E: more  [arg-type] # E: another  [assignment]
@@ -1482,18 +1625,18 @@ class TestFileContent:
         07:
         08: def other() -> None:
         09:     a: int = str # E: nope  [assignment]
-        10:     # ^ REVEAL[a] ^ builtins.int
+        10:     # ^ REVEAL[a]<regex> ^ builtins\.i.+
         11:     return 1 # E: asdf  [var-annotated]
         12:
         13: if True:
-        14:     reveal_type(found) # E: hi  [arg-type] # N: Revealed type is "asdf" # N: Revealed type is "asdf2" # E: hi  [arg-type]
+        14:     reveal_type(found) # E: hi  [arg-type] # N<glob>: Revealed type is "asdf" # N: Revealed type is "asdf2" # E: hi  [arg-type]
         15:     # ^ NOTE ^ amaze
         """)
 
         path = "fle.py"
         location = tmp_path / path
 
-        transformed = _without_line_numbers("""
+        transformed = _without_line_numbers(r"""
         01: a: int = 1
         02: model: type[Leader] = Follow1 
         03: reveal_type(model) # N: Revealed type is "one" # E: an error  [arg-type] # E: more  [arg-type] # E: another  [assignment]
@@ -1504,11 +1647,11 @@ class TestFileContent:
         08: def other() -> None:
         09:     a: int = str # E: nope  [assignment]
         10:     reveal_type(a)
-        11:     # ^ REVEAL[a] ^ builtins.int
+        11:     # ^ REVEAL[a]<regex> ^ builtins\.i.+
         12:     return 1 # E: asdf  [var-annotated]
         13:
         14: if True:
-        15:     reveal_type(found) # E: hi  [arg-type] # N: Revealed type is "asdf" # N: Revealed type is "asdf2" # E: hi  [arg-type]
+        15:     reveal_type(found) # E: hi  [arg-type] # N<glob>: Revealed type is "asdf" # N: Revealed type is "asdf2" # E: hi  [arg-type]
         16:     # ^ NOTE ^ amaze
         """)
 
@@ -1578,7 +1721,9 @@ class TestFileContent:
                 matchers.MatchNote(
                     location=location,
                     line_number=10,
-                    msg=notices.ProgramNotice.reveal_msg("builtins.int"),
+                    msg=notices.RegexMsg.create(
+                        pattern=notices.ProgramNotice.reveal_msg(r"builtins\.i.+")
+                    ),
                 ),
             ]
             notices_at_12 = [
@@ -1597,7 +1742,9 @@ class TestFileContent:
                     msg="hi",
                 ),
                 matchers.MatchNote(
-                    location=location, line_number=15, msg='Revealed type is "asdf"'
+                    location=location,
+                    line_number=15,
+                    msg=notices.GlobMsg.create(pattern='Revealed type is "asdf"'),
                 ),
                 matchers.MatchNote(
                     location=location, line_number=15, msg='Revealed type is "asdf2"'

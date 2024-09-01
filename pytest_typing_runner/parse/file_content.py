@@ -44,7 +44,7 @@ class CommentMatch:
 
     severity: protocols.Severity
 
-    msg: str = ""
+    msg: str | protocols.NoticeMsg = ""
     names: Sequence[str] = dataclasses.field(default_factory=tuple)
 
     is_reveal: bool = False
@@ -54,6 +54,23 @@ class CommentMatch:
     is_whole_line: bool = False
 
     modify_lines: parse_protocols.ModifyParsedLineBefore | None = None
+
+
+def _make_msg(
+    *, msg: str, msg_maker_name: str, msg_maker_map: protocols.NoticeMsgMakerMap | None = None
+) -> str | protocols.NoticeMsg:
+    if not msg_maker_name:
+        return msg
+
+    if msg_maker_map is None:
+        raise parse_errors.InvalidMsgMaker(want=msg_maker_name, available=None)
+
+    msg_maker = msg_maker_map.get(msg_maker_name)
+
+    if msg_maker is None:
+        raise parse_errors.InvalidMsgMaker(want=msg_maker_name, available=msg_maker_map.available)
+
+    return msg_maker(pattern=msg)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -83,7 +100,7 @@ class InlineCommentMatch(CommentMatch):
         W = "W"
 
     instruction_regex: ClassVar[re.Pattern[str]] = re.compile(
-        r"(?P<instruction>N|E|W):((?P<col>\d+) )? (?P<rest>.+)"
+        r"(?P<instruction>N|E|W)(<(?P<msg_maker_name>[^>]+)>)?:((?P<col>\d+) )? (?P<rest>.+)"
     )
 
     error_type_regex: ClassVar[re.Pattern[str]] = re.compile(r"\s+\[(?P<error_type>[^\]]+)\]\s*$")
@@ -118,6 +135,12 @@ class InlineCommentMatch(CommentMatch):
         * W instructions sets ``is_warning=True``
         * All instructions set ``is_whole_line=False``
 
+        If the instruction is followed by a string in angle brackets then that
+        can be used to specify how the ``msg`` is compared.
+
+        For example: ``# N<regex>: thing.+`` will match against any ``note``
+        that begins with "thing" and is followed by one or more characters.
+
         Lines that only have whitespace before the first hash will be ignored
         """
         if "#" not in line:
@@ -146,6 +169,12 @@ class InlineCommentMatch(CommentMatch):
                     error_type = me.groupdict()["error_type"]
                     rest = rest[: me.span()[0]]
 
+            msg = _make_msg(
+                msg=rest,
+                msg_maker_name=(gd["msg_maker_name"] or "").strip(),
+                msg_maker_map=msg_maker_map,
+            )
+
             match instruction:
                 case cls._Instruction.E:
                     yield cls(
@@ -153,7 +182,7 @@ class InlineCommentMatch(CommentMatch):
                         is_error=True,
                         is_whole_line=False,
                         severity=notices.ErrorSeverity(error_type),
-                        msg=rest.strip(),
+                        msg=msg,
                     )
                 case cls._Instruction.N:
                     yield cls(
@@ -161,7 +190,7 @@ class InlineCommentMatch(CommentMatch):
                         is_note=True,
                         is_whole_line=False,
                         severity=notices.NoteSeverity(),
-                        msg=rest.strip(),
+                        msg=msg,
                     )
                 case cls._Instruction.W:
                     yield cls(
@@ -169,7 +198,7 @@ class InlineCommentMatch(CommentMatch):
                         is_warning=True,
                         is_whole_line=False,
                         severity=notices.WarningSeverity(),
-                        msg=rest.strip(),
+                        msg=msg,
                     )
                 case _:
                     assert_never(instruction)
@@ -182,16 +211,29 @@ class InstructionMatch(CommentMatch):
 
     Implementation of :protocol:`pytest_typing_runner.parse.protocols.CommentMatch`
 
-    Will match the following forms:
+    Will match the form:
 
-    * ``# ^ NAME[name] ^``
-    * ``# ^ REVEAL ^ <builtins.int>``
-    * ``# ^ REVEAL[name] ^ <builtins.int>``
-    * ``# ^ NOTE ^ some note``
-    * ``# ^ NOTE[name] ^ some note``
-    * ``# ^ ERROR(error-type) ^ some error``
-    * ``# ^ ERROR(error-type)[name] ^ some error``
-    * ``# ^ WARNING[name] ^ some warning``
+    ``# ^ INSTRUCTION(error-type)[name]<match> ^ msg``
+
+    Where INSTRUCTION is one of:
+
+    * NAME
+    * REVEAL
+    * ERROR
+    * NOTE
+    * WARNING
+
+    And ``error-type`` is only valid for ``ERROR`` instructions.
+
+    The ``name`` is a way of registered a name for that line.
+
+    And ``match`` says how to compare ``msg`` in this notice to the ``msg``
+    in the notice that was received for this file and line.
+
+    The default ``match`` options are ``plain``, ``regex`` and ``glob``.
+
+    The ``REVEAL`` instruction is special in that it will ensure it is preceded
+    by a ``reveal_type(...)`` line in the file.
     """
 
     class _Instruction(enum.Enum):
@@ -204,6 +246,7 @@ class InstructionMatch(CommentMatch):
     potential_instruction_regex: ClassVar[re.Pattern[str]] = re.compile(
         r"^\s*#\s*(\^|[a-zA-Z]+\s+\^)"
     )
+
     instruction_regex: ClassVar[re.Pattern[str]] = re.compile(
         # ^ INSTR >>
         r"^(?P<prefix_whitespace>\s*)"
@@ -215,6 +258,10 @@ class InstructionMatch(CommentMatch):
         # [name]?
         r"("
         r"\[(?P<name>[^\]]*)\]"
+        r")?"
+        # <match>?
+        r"("
+        r"<(?P<msg_maker_name>[^>]+)>"
         r")?"
         # << ^
         r"\s*\^"
@@ -293,6 +340,15 @@ class InstructionMatch(CommentMatch):
         names = [name] if (name := gd.get("name", "") or "") else []
         rest = gd["rest"].strip()
 
+        if instruction is cls._Instruction.REVEAL:
+            rest = notices.ProgramNotice.reveal_msg(rest)
+
+        msg = _make_msg(
+            msg=rest,
+            msg_maker_name=(gd["msg_maker_name"] or "").strip(),
+            msg_maker_map=msg_maker_map,
+        )
+
         if error_type and instruction is not cls._Instruction.ERROR:
             raise parse_errors.InvalidInstruction(
                 reason="Only Error instructions should be of the form 'INSTRUCTION(error_type)'",
@@ -321,7 +377,7 @@ class InstructionMatch(CommentMatch):
                     is_note=True,
                     is_whole_line=True,
                     severity=notices.NoteSeverity(),
-                    msg=notices.ProgramNotice.reveal_msg(rest),
+                    msg=msg,
                     modify_lines=functools.partial(
                         cls._modify_for_reveal, prefix_whitespace=prefix_whitespace
                     ),
@@ -332,7 +388,7 @@ class InstructionMatch(CommentMatch):
                     is_error=True,
                     is_whole_line=True,
                     severity=notices.ErrorSeverity(error_type),
-                    msg=rest,
+                    msg=msg,
                 )
             case cls._Instruction.WARNING:
                 yield cls(
@@ -340,7 +396,7 @@ class InstructionMatch(CommentMatch):
                     is_warning=True,
                     is_whole_line=True,
                     severity=notices.WarningSeverity(),
-                    msg=rest,
+                    msg=msg,
                 )
             case cls._Instruction.NOTE:
                 yield cls(
@@ -348,7 +404,7 @@ class InstructionMatch(CommentMatch):
                     is_note=True,
                     is_whole_line=True,
                     severity=notices.NoteSeverity(),
-                    msg=rest,
+                    msg=msg,
                 )
             case _:
                 assert_never(instruction)
@@ -432,7 +488,7 @@ class InstructionParser:
                         ]
                     )
                 )
-            elif match.is_note:
+            elif match.is_note and isinstance(match.msg, str):
                 skip: bool = False
 
                 def matcher(notice: protocols.ProgramNotice, /) -> bool:
@@ -457,6 +513,16 @@ class InstructionParser:
                                 [*(() if not notice.msg.raw else (notice.msg.raw,)), match.msg]
                             ),
                         ),
+                    )
+                )
+            elif match.is_note:
+                changers.append(
+                    notice_changers.AppendToLine(
+                        notices_maker=lambda line_notices: [
+                            line_notices.generate_notice(
+                                severity=notices.NoteSeverity(), msg=match.msg
+                            )
+                        ]
                     )
                 )
 
