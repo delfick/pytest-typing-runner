@@ -130,7 +130,7 @@ class CommentMatch(Protocol):
         """
 
     @property
-    def msg(self) -> str:
+    def msg(self) -> str | protocols.NoticeMsg:
         """
         The ``msg`` to use if this match adds a notice
         """

@@ -124,7 +124,10 @@ class NoticeMsgBase(abc.ABC):
         return repr(self.raw)
 
     def __eq__(self, o: object, /) -> bool:
-        return o == self.raw
+        if isinstance(o, str):
+            return o == self.raw
+        else:
+            return isinstance(o, type(self)) and o == self.raw
 
     def __lt__(self, o: protocols.NoticeMsg, /) -> bool:
         return self.raw < o.raw
