@@ -506,6 +506,25 @@ class NoticeMsgMaker(Protocol):
     def __call__(self, *, pattern: str) -> NoticeMsg: ...
 
 
+class NoticeMsgMakerMap(Protocol):
+    """
+    Holds notice msg makers
+    """
+
+    @overload
+    def get(self, name: str, /, default: NoticeMsgMaker) -> NoticeMsgMaker: ...
+
+    @overload
+    def get(self, name: str, /, default: None = None) -> NoticeMsgMaker | None: ...
+
+    def get(
+        self, name: str, /, default: NoticeMsgMaker | None = None
+    ) -> NoticeMsgMaker | None: ...
+
+    @property
+    def available(self) -> Sequence[str]: ...
+
+
 class ProgramNoticeCloneKwargs(TypedDict):
     line_number: NotRequired[int]
     col: NotRequired[int | None]
@@ -1041,6 +1060,7 @@ if TYPE_CHECKING:
 
     P_NoticeMsg = NoticeMsg
     P_NoticeMsgMaker = NoticeMsgMaker
+    P_NoticeMsgMakerMap = NoticeMsgMakerMap
 
     P_DiffNotices = DiffNotices
     P_DiffFileNotices = DiffFileNotices

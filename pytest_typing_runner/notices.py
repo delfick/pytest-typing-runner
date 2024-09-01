@@ -6,7 +6,7 @@ import fnmatch
 import pathlib
 import re
 from collections import defaultdict
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, MutableMapping, Sequence
 from typing import TYPE_CHECKING, ClassVar, Literal, cast, overload
 
 from typing_extensions import Self, Unpack
@@ -265,6 +265,41 @@ class GlobMsg(NoticeMsgBase):
         Returns an instance of GlobMsg using the provided ``pattern``
         """
         return self.create(pattern=pattern)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class NoticeMsgMakerMap:
+    """
+    Holds onto a map of names to msg makers.
+
+    Implements :protocol:`pytest_tying_runner.protocols.NoticeMsgMakerMap`
+    """
+
+    makers: MutableMapping[str, protocols.NoticeMsgMaker] = dataclasses.field(
+        default_factory=lambda: {
+            "plain": PlainMsg.create,
+            "regex": RegexMsg.create,
+            "glob": GlobMsg.create,
+        }
+    )
+
+    @overload
+    def get(self, name: str, /, default: protocols.NoticeMsgMaker) -> protocols.NoticeMsgMaker: ...
+
+    @overload
+    def get(self, name: str, /, default: None = None) -> protocols.NoticeMsgMaker | None: ...
+
+    def get(
+        self, name: str, /, default: protocols.NoticeMsgMaker | None = None
+    ) -> protocols.NoticeMsgMaker | None:
+        return self.makers.get(name, default)
+
+    @property
+    def available(self) -> Sequence[str]:
+        """
+        Return the available msg makers
+        """
+        return list(self.makers)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -1187,3 +1222,5 @@ if TYPE_CHECKING:
     _RCM: protocols.NoticeMsgMaker = RegexMsg.create
     _GC: protocols.NoticeMsg = cast(GlobMsg, None)
     _GCM: protocols.NoticeMsgMaker = GlobMsg.create
+
+    _NMM: protocols.NoticeMsgMakerMap = cast(NoticeMsgMakerMap, None)
