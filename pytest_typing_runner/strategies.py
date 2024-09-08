@@ -156,6 +156,8 @@ class StrategyRegistry:
             description, _ = got
             help_text.append("")
             help_text.append(name)
+            if name == self.default:
+                help_text[-1] = f"{help_text[-1]} (default)"
             for line in description.split("\n"):
                 help_text.append(f"    {line}")
 
