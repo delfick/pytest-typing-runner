@@ -124,6 +124,9 @@ class MypyOutput:
         program_notices = into
 
         for line in lines:
+            if not line.strip():
+                continue
+
             match = cls._LineMatch.match(line)
             if match is None:
                 raise parse_errors.InvalidMypyOutputLine(line=line)
@@ -138,7 +141,9 @@ class MypyOutput:
                         notices_maker=lambda line_notices: [
                             normalise(
                                 line_notices.generate_notice(
-                                    severity=match.severity, msg=match.msg
+                                    severity=match.severity,
+                                    msg=match.msg,
+                                    msg_maker=notices.PlainMsg.create,
                                 )
                             )
                         ]

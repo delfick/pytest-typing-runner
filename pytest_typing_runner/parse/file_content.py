@@ -598,7 +598,7 @@ class FileContent:
         """
         line_number = 0
         result: list[str] = [""]
-        file_notices = into.clear(clear_names=True)
+        file_notices = into
         line_number_for_name: int = 0
 
         for line in content.split("\n"):
