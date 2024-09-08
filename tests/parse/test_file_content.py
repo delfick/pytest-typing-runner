@@ -948,7 +948,7 @@ class TestFileContent:
         assertExpected(parsed)
 
         # And can run again with no further changes
-        replaced, parsed = parser(replaced, into=parsed)
+        replaced, parsed = parser(replaced, into=notices.FileNotices(location=location))
         assert replaced == original
         assertExpected(parsed)
 
@@ -986,7 +986,7 @@ class TestFileContent:
         assertExpected(parsed)
 
         # And can run again with no further changes
-        replaced, parsed = parser(replaced, into=parsed)
+        replaced, parsed = parser(replaced, into=notices.FileNotices(location=location))
         assert replaced == original
         assertExpected(parsed)
 
@@ -1026,7 +1026,7 @@ class TestFileContent:
         assertExpected(parsed)
 
         # And can run again with no further changes
-        replaced, parsed = parser(replaced, into=parsed)
+        replaced, parsed = parser(replaced, into=notices.FileNotices(location=location))
         assert replaced == original
         assertExpected(parsed)
 
@@ -1091,7 +1091,7 @@ class TestFileContent:
         assertExpected(parsed)
 
         # And can run again with no further changes
-        replaced, parsed = parser(replaced, into=parsed)
+        replaced, parsed = parser(replaced, into=notices.FileNotices(location=location))
         assert replaced == original
         assertExpected(parsed)
 
@@ -1142,7 +1142,7 @@ class TestFileContent:
         assertExpected(parsed)
 
         # And can run again with no further changes
-        replaced, parsed = parser(replaced, into=parsed)
+        replaced, parsed = parser(replaced, into=notices.FileNotices(location=location))
         assert replaced == transformed
         assertExpected(parsed)
 
@@ -1173,7 +1173,7 @@ class TestFileContent:
         assertExpected(parsed)
 
         # And can run again with no further changes
-        replaced, parsed = parser(replaced, into=parsed)
+        replaced, parsed = parser(replaced, into=notices.FileNotices(location=location))
         assert replaced == original
         assertExpected(parsed)
 
@@ -1309,7 +1309,7 @@ class TestFileContent:
         assertExpected(parsed)
 
         # And can run again with no further changes
-        replaced, parsed = parser(replaced, into=parsed)
+        replaced, parsed = parser(replaced, into=notices.FileNotices(location=location))
         assert replaced == transformed
         assertExpected(parsed)
 
@@ -1482,7 +1482,7 @@ class TestFileContent:
         assertExpected(parsed)
 
         # And can run again with no further changes
-        replaced, parsed = parser(replaced, into=parsed)
+        replaced, parsed = parser(replaced, into=notices.FileNotices(location=location))
         assert replaced == transformed
         assertExpected(parsed)
 
@@ -1608,7 +1608,7 @@ class TestFileContent:
         assertExpected(parsed)
 
         # And can run again with no further changes
-        replaced, parsed = parser(replaced, into=parsed)
+        replaced, parsed = parser(replaced, into=notices.FileNotices(location=location))
         assert replaced == original
         assertExpected(parsed)
 
@@ -1780,6 +1780,6 @@ class TestFileContent:
         assertExpected(parsed)
 
         # And can run again with no further changes
-        replaced, parsed = parser(replaced, into=parsed)
+        replaced, parsed = parser(replaced, into=notices.FileNotices(location=location))
         assert replaced == transformed
         assertExpected(parsed)
