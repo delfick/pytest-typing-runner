@@ -5,7 +5,15 @@ from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self
 
-from . import notices, protocols
+from . import errors, notices, protocols
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class NoticesAreDifferent(errors.PyTestTypingRunnerException, AssertionError):
+    difference: str
+
+    def __str__(self) -> str:
+        return self.difference
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -162,7 +170,7 @@ def compare_notices(diff: protocols.DiffNotices) -> None:
                         msg.append(f"{prefix}  !! WANT !! {same_or_different[1]}")
 
     if different:
-        raise AssertionError("\n" + "\n".join(msg))
+        raise NoticesAreDifferent(difference="\n" + "\n".join(msg))
 
 
 if TYPE_CHECKING:
