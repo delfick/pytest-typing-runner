@@ -59,7 +59,7 @@ class TestStrategyRegistry:
             == textwrap.dedent("""
             The caching strategy used by the plugin
 
-            one
+            one (default)
                 a thing
                 and stuff
 
@@ -89,7 +89,7 @@ class TestStrategyRegistry:
             == textwrap.dedent("""
             The caching strategy used by the plugin
 
-            one
+            one (default)
                 a thing
                 and stuff
             """).strip()
