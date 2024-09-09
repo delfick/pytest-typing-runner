@@ -8,6 +8,8 @@ Changelog
 0.5.1 - TBD
     * Made FileParser do mypy style inline comments by default
     * It is now possible to create notices for comparison using regexes and globs.
+    * Added a ``typing_scenario_root_dir`` fixture for configurating where all the files
+      in the scenario end up.
 
 .. _release-0.5.0:
 

@@ -38,20 +38,25 @@ def typing_scenario_runs_maker(
 
 
 @pytest.fixture
+def typing_scenario_root_dir(tmp_path: pathlib.Path) -> pathlib.Path:
+    return tmp_path / "scenario_root"
+
+
+@pytest.fixture
 def typing_scenario_runner(
     typing_runner_config: protocols.RunnerConfig,
     typing_scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
     typing_scenario_runs_maker: protocols.ScenarioRunsMaker[protocols.T_Scenario],
     typing_scenario_runner_maker: protocols.ScenarioRunnerMaker[protocols.T_Scenario],
+    typing_scenario_root_dir: pathlib.Path,
     request: pytest.FixtureRequest,
-    tmp_path: pathlib.Path,
 ) -> Iterator[protocols.ScenarioRunner[protocols.T_Scenario]]:
     """
     Pytest fixture used to get a typing scenario helper and manage cleanup
     """
     runner = typing_scenario_runner_maker(
         config=typing_runner_config,
-        root_dir=tmp_path,
+        root_dir=typing_scenario_root_dir,
         scenario_maker=typing_scenario_maker,
         scenario_runs_maker=typing_scenario_runs_maker,
     )
