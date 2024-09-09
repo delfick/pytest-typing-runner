@@ -18,7 +18,7 @@ There are these relevant protocols:
 * :protocol:`pytest_typing_runner.protocols.Scenario`
 * :protocol:`pytest_typing_runner.protocols.ScenarioMaker`
 
-There are three pytest fixtures that can be overridden within any pytest scope
+There are a few pytest fixtures that can be overridden within any pytest scope
 to change what concrete implementations get used:
 
 .. code-block:: python
@@ -70,6 +70,21 @@ to change what concrete implementations get used:
         that the type annotations are correct and it's recommended to have
         protective assertions in complicated setups.
         """
+
+.. code-block:: python
+   
+    import pytest
+    import pathlib
+
+
+    @pytest.fixture
+    def typing_scenario_root_dir(tmp_path: pathlib.Path) -> pathlib.Path:
+        """
+        This sets the root path for all the files in the scenario.
+
+        This example shows the default
+        """
+        return tmp_path / "scenario_root"
 
 Example
 +++++++
