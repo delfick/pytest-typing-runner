@@ -196,7 +196,7 @@ class TestCopyDirectory:
 class TestBasicPythonAssignmentChanger:
     def test_it_complains_if_location_is_outside_root_dir(self, tmp_path: pathlib.Path) -> None:
         changer = file_changers.BasicPythonAssignmentChanger(
-            root_dir=tmp_path, path="../../somewhere", variable_changers={}
+            cwd=tmp_path, root_dir=tmp_path, path="../../somewhere", variable_changers={}
         )
 
         with pytest.raises(file_changers.LocationOutOfBounds) as e:
@@ -221,6 +221,7 @@ class TestBasicPythonAssignmentChanger:
             return node
 
         changer = file_changers.BasicPythonAssignmentChanger(
+            cwd=tmp_path,
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={"ONE": looker, "TWO": looker, "THREE": looker},
@@ -264,6 +265,7 @@ class TestBasicPythonAssignmentChanger:
                         assert_never(node)
 
         changer = file_changers.BasicPythonAssignmentChanger(
+            cwd=tmp_path,
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={
@@ -281,6 +283,48 @@ class TestBasicPythonAssignmentChanger:
         """)
 
         assert changer.after_change(default_content=default_content).strip() == expected.strip()
+
+    def test_it_can_rely_on_being_in_cwd(self, tmp_path: pathlib.Path) -> None:
+        default_content = """
+        import pathlib
+        ONE: str = pathlib.Path('blah').read_text()
+        """
+
+        cwd = tmp_path / "configs"
+        cwd.mkdir()
+
+        (cwd / "blah").write_text("hi")
+
+        called: list[tuple[str, object]] = []
+
+        def looker(
+            *, node: file_changers.T_Assign, variable_name: str, values: dict[str, object]
+        ) -> file_changers.T_Assign:
+            called.append((variable_name, values[variable_name]))
+            return node
+
+        changer = file_changers.BasicPythonAssignmentChanger(
+            cwd=cwd,
+            root_dir=tmp_path,
+            path="configs/my_file.py",
+            variable_changers={"ONE": looker},
+        )
+        got = changer.after_change(default_content=default_content).strip()
+        assert got == textwrap.dedent(default_content).strip()
+        assert called == [("ONE", "hi")]
+
+        (cwd / "my_file.py").write_text(got)
+        (cwd / "blah").write_text("there")
+
+        changer = file_changers.BasicPythonAssignmentChanger(
+            cwd=cwd,
+            root_dir=tmp_path,
+            path="configs/my_file.py",
+            variable_changers={"ONE": looker},
+        )
+        got = changer.after_change(default_content="empty_and_not_used").strip()
+        assert got == textwrap.dedent(default_content).strip()
+        assert called == [("ONE", "hi"), ("ONE", "there")]
 
 
 class TestVariableFinder:
@@ -300,6 +344,7 @@ class TestVariableFinder:
             called.append((variable_name, value))
 
         changer = file_changers.BasicPythonAssignmentChanger(
+            cwd=tmp_path,
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={
@@ -340,6 +385,7 @@ class TestListVariableChanger:
                 return [ast.Constant(i) for i in self.new_values]
 
         changer = file_changers.BasicPythonAssignmentChanger(
+            cwd=tmp_path,
             root_dir=tmp_path,
             path="my_file.py",
             variable_changers={
