@@ -50,8 +50,9 @@ class StrategyRegistry:
         """
         registry = cls()
 
-        for entry_point in importlib.metadata.entry_points(
-            group="pytest_typing_runner_strategies"
+        for entry_point in sorted(
+            importlib.metadata.entry_points(group="pytest_typing_runner_strategies"),
+            key=lambda ep: ep.name,
         ):
             register = entry_point.load()
             register(registry)

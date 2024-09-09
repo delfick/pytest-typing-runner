@@ -12,6 +12,8 @@ Changelog
       in the scenario end up.
     * Change the ``RunnerConfig`` have the default strategy rather than only a way
       of creating the default strategy.
+    * Order entry points when doing discovery of the typing strategies available to the
+      CLI options.
 
 .. _release-0.5.0:
 
