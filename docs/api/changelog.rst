@@ -18,6 +18,9 @@ Changelog
       ``file_changers.BasicPythonAssignmentChanger`` regardless of whether the file being
       changed already exists or not.
     * Allow runners to modify the run options and pass that along in the notice checker.
+    * The behaviour of ``scenario.expects.failure`` is now that this indicates the run is expected
+      to fail assertions rather than only that the run is expected to exit with exit code of
+      non zero
 
 .. _release-0.5.0:
 

@@ -456,7 +456,6 @@ class TestUsingBuilder:
 
         @builder.run_and_check_after
         def _() -> None:
-            builder.expect_failure()
             builder.on("main.py").append(
                 """
                 a = "asdf"
@@ -497,7 +496,6 @@ class TestUsingBuilder:
         builder.run_and_check()
         assert builder.scenario_runner.scenario.called == ["run"]
 
-        builder.expect_failure()
         builder.on("main.py").append(
             """
             a = "asdf"
@@ -523,16 +521,6 @@ class TestUsingBuilder:
 
         assert str(e.value).strip() == expected
         assert builder.scenario_runner.scenario.called == ["run", "run", "run"]
-
-    def test_it_can_change_failure_expectations(
-        self, builder: Builder, typing_scenario_runner: ScenarioRunner
-    ) -> None:
-        assert not typing_scenario_runner.scenario.expects.failure
-        builder.expect_failure()
-        assert typing_scenario_runner.scenario.expects.failure
-
-        builder.expect_success()
-        assert not typing_scenario_runner.scenario.expects.failure
 
     def test_it_change_daemon_restarting_expectation(
         self, builder: Builder, typing_scenario_runner: ScenarioRunner

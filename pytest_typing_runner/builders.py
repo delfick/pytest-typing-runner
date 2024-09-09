@@ -182,7 +182,6 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
 
             @build.run_and_check_after
             def _() -> None:
-                build.expect_failure()
                 build.on("main.py").append(
                     """
                     a = "asdf"
@@ -322,34 +321,31 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
             extra_setup()
 
         root_dir = options.cwd
-        program_notices = options.scenario_runner.generate_program_notices()
 
-        return lambda: expectations.Expectations[protocols.T_Scenario](
-            expect_fail=self.scenario_runner.scenario.expects.failure,
-            expect_stderr="",
-            expect_notices=program_notices.set_files(
-                {
-                    (location := root_dir / path): known.notices(
-                        into=program_notices.generate_notices_for_location(location)
-                    )
-                    for path, known in self._known_files.items()
-                }
-            ),
-        )
+        def make_expectation() -> protocols.Expectations[protocols.T_Scenario]:
+            program_notices = options.scenario_runner.generate_program_notices()
 
-    def expect_failure(self) -> Self:
-        """
-        Record on the builder that future builds are expected to fail
-        """
-        self.scenario_runner.scenario.expects.failure = True
-        return self
+            for path, known in self._known_files.items():
+                location = root_dir / path
+                file_notices = program_notices.notices_at_location(
+                    location
+                ) or program_notices.generate_notices_for_location(location)
 
-    def expect_success(self) -> Self:
-        """
-        Record on the builder that future builds are expected to succeed
-        """
-        self.scenario_runner.scenario.expects.failure = False
-        return self
+                program_notices = program_notices.set_files(
+                    {location: known.notices(into=file_notices)}
+                )
+
+            expect_fail = False
+            if any(n.severity == notices.ErrorSeverity("") for n in list(program_notices)):
+                expect_fail = True
+
+            return expectations.Expectations[protocols.T_Scenario](
+                expect_fail=expect_fail,
+                expect_stderr="",
+                expect_notices=program_notices,
+            )
+
+        return make_expectation
 
     def daemon_should_not_restart(self) -> Self:
         """

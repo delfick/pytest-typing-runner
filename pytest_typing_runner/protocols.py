@@ -877,7 +877,7 @@ class Expects(Protocol):
 
     failure: bool
     """
-    Whether failure is expected
+    Whether the assertions in the test are expected to fail
     """
 
     daemon_restarted: bool

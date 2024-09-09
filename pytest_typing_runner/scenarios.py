@@ -36,7 +36,7 @@ class Expects:
 
     Implements :protocol:`pytest_typing_runner.protocols.Expects`
 
-    :param failure: Whether the type checker is expected to fail
+    :param failure: Whether we expect the test to raise a difference in notices
     :param daemon_restarted:
         Used when a type checker is used that depends on a daemon and
         indicates whether the scenario believes the daemon will be restarted
@@ -429,16 +429,21 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         try:
             expectations.check(notice_checker=checker)
         except Exception as err:
-            self.runs.add_run(checker=checker, expectation_error=err)
-            raise
+            run = self.runs.add_run(checker=checker, expectation_error=err)
+            if not self.scenario.expects.failure:
+                raise
         else:
             run = self.runs.add_run(checker=checker, expectation_error=None)
+            assert not self.scenario.expects.failure, "expected assertions to fail"
 
         if options.do_followup and run.is_first:
             repeat_expectations: protocols.ExpectationsSetup[protocols.T_Scenario] = (
                 lambda options: lambda: expectations
             )
             self.run_and_check(setup_expectations=repeat_expectations, options=options)
+
+        # Make it necessary to reset this explicitly every time
+        self.scenario.expects.failure = False
 
     def normalise_program_runner_notice(
         self,
