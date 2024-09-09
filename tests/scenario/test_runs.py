@@ -220,6 +220,7 @@ class TestScenarioRun:
             runner = options.program_runner_maker(options=options)
             notice_checker = stubs.StubNoticeChecker(
                 runner=runner,
+                run_options=options,
                 result=stubs.StubRunResult(
                     exit_code=2,
                     stdout="one\ntwo  \nthree four\nfive::",
@@ -327,6 +328,7 @@ class TestScenarioRuns:
         options.check_paths.append("two")
         notice_checker = stubs.StubNoticeChecker(
             runner=options.program_runner_maker(options=options),
+            run_options=options,
             result=stubs.StubRunResult(
                 exit_code=2,
                 stdout="one\ntwo  \nthree four\nfive::",

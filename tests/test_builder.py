@@ -413,7 +413,7 @@ class TestUsingBuilder:
             else:
                 raise AssertionError(found)
 
-            return runners.MypyChecker(result=result, runner=self)
+            return runners.MypyChecker(result=result, run_options=self.options, runner=self)
 
         def short_display(self) -> str:
             return "stubrunner"

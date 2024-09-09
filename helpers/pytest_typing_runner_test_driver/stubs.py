@@ -16,6 +16,7 @@ class StubRunResult:
 class StubNoticeChecker(Generic[protocols.T_Scenario]):
     result: protocols.RunResult
     runner: protocols.ProgramRunner[protocols.T_Scenario]
+    run_options: protocols.RunOptions[protocols.T_Scenario]
 
     def check(self, expected_notices: protocols.ProgramNotices, /) -> None:
         pass
@@ -26,7 +27,7 @@ class StubProgramRunner(Generic[protocols.T_Scenario]):
     options: protocols.RunOptions[protocols.T_Scenario]
 
     def run(self) -> protocols.NoticeChecker[protocols.T_Scenario]:
-        return StubNoticeChecker(result=StubRunResult(), runner=self)
+        return StubNoticeChecker(result=StubRunResult(), run_options=self.options, runner=self)
 
     def short_display(self) -> str:
         return "stubrun"

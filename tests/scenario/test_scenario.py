@@ -114,7 +114,9 @@ class TestScenarioRunner:
         @dataclasses.dataclass(frozen=True, kw_only=True)
         class Runner(stubs.StubProgramRunner[protocols.Scenario]):
             def run(self) -> protocols.NoticeChecker[protocols.Scenario]:
-                notice_checker = stubs.StubNoticeChecker(result=stubs.StubRunResult(), runner=self)
+                notice_checker = stubs.StubNoticeChecker(
+                    result=stubs.StubRunResult(), run_options=self.options, runner=self
+                )
                 called.append(("run", notice_checker))
                 return notice_checker
 
@@ -280,6 +282,7 @@ class TestScenarioRunner:
                 ) -> protocols.NoticeChecker[protocols.Scenario]:
                     checker = stubs.StubNoticeChecker(
                         result=stubs.StubRunResult(exit_code=1, stdout="one\ntwo"),
+                        run_options=options,
                         runner=stubs.StubProgramRunner(options=options),
                     )
                     called.append(("execute", options, checker))
@@ -355,6 +358,7 @@ class TestScenarioRunner:
                     if "checker1" not in made:
                         checker = stubs.StubNoticeChecker(
                             result=stubs.StubRunResult(exit_code=1, stdout="one\ntwo"),
+                            run_options=options,
                             runner=stubs.StubProgramRunner(options=options),
                         )
                         made["checker1"] = checker
@@ -363,6 +367,7 @@ class TestScenarioRunner:
                             result=stubs.StubRunResult(
                                 exit_code=0, stdout="three\nfour", stderr="five"
                             ),
+                            run_options=options,
                             runner=stubs.StubProgramRunner(options=options),
                         )
                         made["checker2"] = checker

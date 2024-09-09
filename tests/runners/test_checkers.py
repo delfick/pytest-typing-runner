@@ -10,7 +10,11 @@ from pytest_typing_runner import notice_changers, notices, protocols, runners, s
 
 class NoticeCheckerMaker(Protocol):
     def __call__(
-        self, *, result: protocols.RunResult, runner: protocols.ProgramRunner[protocols.Scenario]
+        self,
+        *,
+        result: protocols.RunResult,
+        runner: protocols.ProgramRunner[protocols.Scenario],
+        run_options: protocols.RunOptions[protocols.Scenario],
     ) -> protocols.NoticeChecker[protocols.Scenario]: ...
 
 
@@ -40,7 +44,7 @@ class TestMypyChecker:
         """).strip(),
         )
 
-        checker = checker_maker(result=result, runner=program_runner)
+        checker = checker_maker(result=result, run_options=options, runner=program_runner)
 
         expected_notices = notice_changers.BulkAdd(
             root_dir=tmp_path,
@@ -89,7 +93,7 @@ class TestMypyChecker:
         """).strip(),
         )
 
-        checker = checker_maker(result=result, runner=program_runner)
+        checker = checker_maker(result=result, run_options=options, runner=program_runner)
 
         expected_notices = notice_changers.BulkAdd(
             root_dir=tmp_path,
@@ -169,7 +173,7 @@ class TestDMypyChecker:
         """).strip(),
         )
 
-        checker = checker_maker(result=result, runner=program_runner)
+        checker = checker_maker(result=result, run_options=options, runner=program_runner)
         runner.scenario.expects.daemon_restarted = False
         checker.check(expected_notices)
 
@@ -185,7 +189,7 @@ class TestDMypyChecker:
         )
 
         with pytest.raises(AssertionError, match="Did not expect the daemon to restart"):
-            checker = checker_maker(result=result, runner=program_runner)
+            checker = checker_maker(result=result, run_options=options, runner=program_runner)
             runner.scenario.expects.daemon_restarted = False
             checker.check(expected_notices)
 
@@ -202,13 +206,13 @@ class TestDMypyChecker:
             Success: no issues found in 2 source files
         """).strip(),
         )
-        checker = checker_maker(result=result, runner=program_runner)
+        checker = checker_maker(result=result, run_options=options, runner=program_runner)
         runner.scenario.expects.daemon_restarted = False
         checker.check(expected_notices)
         # should stay false
         assert not runner.scenario.expects.daemon_restarted
 
         with pytest.raises(AssertionError, match="Expect the daemon to have restarted"):
-            checker = checker_maker(result=result, runner=program_runner)
+            checker = checker_maker(result=result, run_options=options, runner=program_runner)
             runner.scenario.expects.daemon_restarted = True
             checker.check(expected_notices)

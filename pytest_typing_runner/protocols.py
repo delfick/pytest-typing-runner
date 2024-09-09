@@ -144,6 +144,12 @@ class NoticeChecker(Protocol[T_Scenario]):
         """
 
     @property
+    def run_options(self) -> RunOptions[T_Scenario]:
+        """
+        The final options used for the run
+        """
+
+    @property
     def runner(self) -> ProgramRunner[T_Scenario]:
         """
         The runner that was used to make the result

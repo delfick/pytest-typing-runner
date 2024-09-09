@@ -139,7 +139,7 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
         * displays path/action from ``file_modifications``
         * displays ``[followup run]`` if ``is_followup`` else displays the combination
           of ``short_display()`` from ``checker.runner`` and the ``args`` and
-          ``check_paths`` on ``checker.runner.options``
+          ``check_paths`` on ``checker.run_options``
         * displays the ``exit_code`` from ``checker.result``
         * displays each line in ``stdout`` and ``stderr`` from ``checker.result``
         * displays the ``expectation_error`` if there was one.
@@ -153,8 +153,8 @@ class ScenarioRun(Generic[protocols.T_Scenario]):
             command = " ".join(
                 [
                     self.checker.runner.short_display(),
-                    *self.checker.runner.options.args,
-                    *self.checker.runner.options.check_paths,
+                    *self.checker.run_options.args,
+                    *self.checker.run_options.check_paths,
                 ]
             )
             yield f"> {command}"
@@ -243,7 +243,7 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
 
         run = ScenarioRun(
             is_first=not self.has_runs,
-            is_followup=checker.runner.options.do_followup and len(self._runs) == 1,
+            is_followup=checker.run_options.do_followup and len(self._runs) == 1,
             checker=checker,
             expectation_error=expectation_error,
             file_modifications=file_modifications,
