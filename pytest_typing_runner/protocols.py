@@ -251,6 +251,12 @@ class ProgramRunnerMaker(Protocol[T_Scenario]):
         Whether this program runner uses a daemon
         """
 
+    @property
+    def program_short(self) -> str:
+        """
+        String representing the family of type checker (i.e. "mypy", "pyright", etc)
+        """
+
     def __call__(self, *, options: RunOptions[T_Scenario]) -> ProgramRunner[T_Scenario]: ...
 
 

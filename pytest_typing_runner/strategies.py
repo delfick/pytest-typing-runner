@@ -181,6 +181,7 @@ class MypyChoice(Generic[protocols.T_Scenario]):
         process or not
     """
 
+    program_short: str
     default_args: Sequence[str]
     do_followups: bool
     same_process: bool
@@ -240,6 +241,7 @@ def _make_no_incremental_strategy() -> protocols.Strategy:
             default_args=["--no-incremental"],
             do_followups=False,
             same_process=config.same_process,
+            program_short="mypy",
         )
 
     if TYPE_CHECKING:
@@ -262,6 +264,7 @@ def _make_incremental_strategy() -> protocols.Strategy:
             default_args=["--incremental"],
             do_followups=True,
             same_process=config.same_process,
+            program_short="mypy",
         )
 
     if TYPE_CHECKING:
@@ -282,6 +285,7 @@ def _make_dmypy_strategy() -> protocols.Strategy:
             default_args=["run", "--"],
             do_followups=True,
             same_process=config.same_process,
+            program_short="mypy",
         )
 
     if TYPE_CHECKING:
