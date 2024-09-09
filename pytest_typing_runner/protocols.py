@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pathlib
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Literal, Protocol, TypedDict, TypeVar, cast, overload
 
 from typing_extensions import NotRequired, Self, Unpack
@@ -398,6 +398,12 @@ class ScenarioRuns(Protocol[T_Scenario]):
     def has_runs(self) -> bool:
         """
         Whether there were any runs to report
+        """
+
+    @property
+    def known_files(self) -> Set[str]:
+        """
+        The paths to all the files created as part of the scenario
         """
 
     @property

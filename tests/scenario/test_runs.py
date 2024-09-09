@@ -382,6 +382,7 @@ class TestScenarioRuns:
         notice_checker = options.program_runner_maker(options=options).run()
         runs.add_run(checker=notice_checker, expectation_error=None)
         assert runs.has_runs
+        assert runs.known_files == {"some/path", "some/other/path"}
 
         got = "\n".join(runs.for_report())
         assert (
@@ -401,6 +402,7 @@ class TestScenarioRuns:
         notice_checker = options.program_runner_maker(options=options).run()
         runs.add_run(checker=notice_checker, expectation_error=None)
         assert runs.has_runs
+        assert runs.known_files == {"some/path", "some/other/path"}
 
         got = "\n".join(runs.for_report())
         assert (
@@ -427,8 +429,10 @@ class TestScenarioRuns:
 
         runs.add_file_modification("some/path", "remove")
         runs.add_file_modification("other/blah", "change")
+        runs.add_file_modification("trees", "create")
         runs.add_run(checker=notice_checker, expectation_error=None)
         assert runs.has_runs
+        assert runs.known_files == {"some/path", "some/other/path", "other/blah", "trees"}
 
         got = "\n".join(runs.for_report())
         assert (
@@ -449,6 +453,7 @@ class TestScenarioRuns:
                :: Run 3
                   | * remove    : some/path
                   | * change    : other/blah
+                  | * create    : trees
                   | > stubrun one .
                   | | exit_code=0
                   | | stdout:
