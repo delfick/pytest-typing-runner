@@ -61,9 +61,7 @@ class StubStrategy:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class StubRunnerConfig:
     same_process: bool = False
-    typing_strategy_maker: protocols.StrategyMaker = dataclasses.field(
-        default_factory=lambda: StubStrategy
-    )
+    typing_strategy: protocols.Strategy = dataclasses.field(default_factory=StubStrategy)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

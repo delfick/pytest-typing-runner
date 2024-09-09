@@ -10,6 +10,8 @@ Changelog
     * It is now possible to create notices for comparison using regexes and globs.
     * Added a ``typing_scenario_root_dir`` fixture for configurating where all the files
       in the scenario end up.
+    * Change the ``RunnerConfig`` have the default strategy rather than only a way
+      of creating the default strategy.
 
 .. _release-0.5.0:
 

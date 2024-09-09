@@ -21,14 +21,12 @@ class RunnerConfig:
 
     :param same_process:
         The default used for `same_process`` on the Scenario.
-    :typing_strategy_maker:
-        An object that can produce a :protocol:`pytest_typing_runner.protocols.StrategyMaker`
-        object for determining the default :protocol:`pytest_typing_runner.protocols.Strategy`
-        to use when creating the :protocol:`pytest_typing_runner.protocols.Scenario`
+    :typing_strategy:
+        Used when creating the :protocol:`pytest_typing_runner.protocols.Scenario`
     """
 
     same_process: bool
-    typing_strategy_maker: protocols.StrategyMaker
+    typing_strategy: protocols.Strategy
 
 
 @dataclasses.dataclass
@@ -298,7 +296,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         scenario = scenario_maker(config=config, root_dir=root_dir)
         return cls(
             scenario=scenario,
-            default_program_runner_maker=config.typing_strategy_maker().program_runner_chooser(
+            default_program_runner_maker=config.typing_strategy.program_runner_chooser(
                 config=config, scenario=scenario
             ),
             runs=scenario_runs_maker(scenario=scenario),

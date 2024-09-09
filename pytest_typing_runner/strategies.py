@@ -124,13 +124,13 @@ class StrategyRegistry:
         Options returned from the function that creates information required
         to make a cli option from this registry
 
-        :param str_to_maker: convert string from the cli into a maker
+        :param str_to_strategy: convert string from the cli into a strategy
         :param help_text: The help to show for this option
         :param default: The name of the default strategy
         :param choices: The available makers to the cli option
         """
 
-        str_to_maker: Callable[[str], protocols.StrategyMaker]
+        str_to_strategy: Callable[[str], protocols.Strategy]
         help_text: str
         default: str
         choices: list[str]
@@ -140,13 +140,13 @@ class StrategyRegistry:
         Return information required to make the command line option
         """
 
-        def str_to_maker(name: str, /) -> protocols.StrategyMaker:
+        def str_to_strategy(name: str, /) -> protocols.Strategy:
             got = self.get_strategy(name=name)
             if got is None:
                 raise argparse.ArgumentTypeError(
                     f"Unknown strategy type: '{name}', available are {', '.join(self.choices)}"
                 )
-            return got[1]
+            return got[1]()
 
         help_text: list[str] = ["The caching strategy used by the plugin"]
         for name in self.choices:
@@ -160,7 +160,7 @@ class StrategyRegistry:
                 help_text.append(f"    {line}")
 
         return self.CLIOptions(
-            str_to_maker=str_to_maker,
+            str_to_strategy=str_to_strategy,
             help_text="\n".join(help_text),
             default=self.default,
             choices=self.choices,

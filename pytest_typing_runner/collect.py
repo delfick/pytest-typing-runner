@@ -14,7 +14,7 @@ def typing_runner_config(pytestconfig: pytest.Config) -> protocols.RunnerConfig:
     """
     return scenarios.RunnerConfig(
         same_process=pytestconfig.option.typing_same_process,
-        typing_strategy_maker=pytestconfig.option.typing_strategy,
+        typing_strategy=pytestconfig.option.typing_strategy,
     )
 
 
@@ -100,5 +100,5 @@ def pytest_addoption(parser: Parser) -> None:
     )
     info = strategies.StrategyRegistry.discover().cli_option_info()
     group.addoption(
-        "--typing-strategy", help=info.help_text, type=info.str_to_maker, default=info.default
+        "--typing-strategy", help=info.help_text, type=info.str_to_strategy, default=info.default
     )
