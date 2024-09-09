@@ -4,7 +4,7 @@ import dataclasses
 import pathlib
 import shutil
 import textwrap
-from collections.abc import Iterator, MutableMapping, MutableSequence, Sequence
+from collections.abc import Iterator, MutableMapping, MutableSequence, Sequence, Set
 from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self
@@ -191,6 +191,7 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
     _file_modifications: list[tuple[str, str]] = dataclasses.field(
         init=False, default_factory=list
     )
+    _known_files: MutableSequence[str] = dataclasses.field(init=False, default_factory=list)
 
     @classmethod
     def create(cls, *, scenario: protocols.T_Scenario) -> Self:
@@ -198,6 +199,13 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
         Helpful classmethod implementing :protocol:`pytest_typing_runner.protocols.ScenarioRunsMaker`
         """
         return cls(scenario=scenario)
+
+    @property
+    def known_files(self) -> Set[str]:
+        """
+        Return all the files that were modified across all runs
+        """
+        return set(self._known_files)
 
     def for_report(self) -> Iterator[str]:
         """
@@ -219,6 +227,7 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
         """
         Record a file modification for the current run
         """
+        self._known_files.append(path)
         self._file_modifications.append((path, action))
 
     def add_run(
