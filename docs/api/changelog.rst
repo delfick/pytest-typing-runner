@@ -3,9 +3,9 @@
 Changelog
 ---------
 
-.. _release-0.5.1:
+.. _release-0.6.0:
 
-0.5.1 - TBD
+0.5.1 - 9 September 2024
     * Made FileParser do mypy style inline comments by default
     * It is now possible to create notices for comparison using regexes and globs.
     * Added a ``typing_scenario_root_dir`` fixture for configurating where all the files
