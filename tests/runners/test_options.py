@@ -121,12 +121,14 @@ class TestRunOptions:
     ) -> None:
         @dataclasses.dataclass(frozen=True, kw_only=True)
         class Strategy(stubs.StubStrategy):
-            program_short: str = "mypy"
+            program_short: str = "stubd"
 
             def program_runner_chooser(
                 self, config: protocols.RunnerConfig, scenario: protocols.T_Scenario
             ) -> protocols.ProgramRunnerMaker[protocols.T_Scenario]:
-                return stubs.StubProgramRunnerMaker(default_args=["stuff"], do_followups=False)
+                return stubs.StubProgramRunnerMaker(
+                    default_args=["stuff"], do_followups=False, program_short=self.program_short
+                )
 
         config = stubs.StubRunnerConfig(typing_strategy_maker=Strategy)
 

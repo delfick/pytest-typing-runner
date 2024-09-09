@@ -38,6 +38,7 @@ class StubProgramRunnerMaker(Generic[protocols.T_Scenario]):
     do_followups: bool = True
     same_process: bool = False
     is_daemon: bool = False
+    program_short: str = "stubd"
 
     runner_kls: type[StubProgramRunner[protocols.T_Scenario]] = StubProgramRunner
 
@@ -49,12 +50,12 @@ class StubProgramRunnerMaker(Generic[protocols.T_Scenario]):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class StubStrategy:
-    program_short: str = "mypy"
+    program_short: str = "stubd"
 
     def program_runner_chooser(
         self, config: protocols.RunnerConfig, scenario: protocols.T_Scenario
     ) -> protocols.ProgramRunnerMaker[protocols.T_Scenario]:
-        return StubProgramRunnerMaker()
+        return StubProgramRunnerMaker(program_short=self.program_short)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
