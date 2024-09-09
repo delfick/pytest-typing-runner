@@ -474,3 +474,75 @@ class TestScenarioRunner:
                    | !!! <ComputerSaysNo> NOPE!
                 """).strip()
             )
+
+        def test_it_does_not_reraise_failure_if_failure_was_expected_and_resets_failure(
+            self, runner: protocols.ScenarioRunner[protocols.Scenario]
+        ) -> None:
+            class ComputerSaysNo(Exception):
+                pass
+
+            error = ComputerSaysNo("NOPE!")
+
+            def setup_expectations(
+                *, options: protocols.RunOptions[protocols.Scenario]
+            ) -> protocols.ExpectationsMaker[protocols.Scenario]:
+                @dataclasses.dataclass(frozen=True, kw_only=True)
+                class Expectations(stubs.StubExpectations[protocols.Scenario]):
+                    def check(
+                        self, *, notice_checker: protocols.NoticeChecker[protocols.Scenario]
+                    ) -> None:
+                        raise error
+
+                return Expectations
+
+            assert not runner.runs.has_runs
+            runner.scenario.expects.failure = True
+
+            options = runners.RunOptions.create(runner)
+            runner.run_and_check(setup_expectations=setup_expectations, options=options)
+
+            assert runner.runs.has_runs
+            assert (
+                "\n".join(runner.runs.for_report())
+                == textwrap.dedent("""
+                :: Run 1
+                   | > stubrun .
+                   | | exit_code=0
+                   | | stdout:
+                   | | stderr:
+                   | !!! <ComputerSaysNo> NOPE!
+                :: Run 2
+                   | > [followup run]
+                   | | exit_code=0
+                   | | stdout:
+                   | | stderr:
+                   | !!! <ComputerSaysNo> NOPE!
+                """).strip()
+            )
+
+            # And expecting failure should be explicit reset
+            assert not runner.scenario.expects.failure
+
+        def test_it_complains_if_assertsion_expected_to_fail_but_dot_not(
+            self, runner: protocols.ScenarioRunner[protocols.Scenario]
+        ) -> None:
+            def setup_expectations(
+                *, options: protocols.RunOptions[protocols.Scenario]
+            ) -> protocols.ExpectationsMaker[protocols.Scenario]:
+                @dataclasses.dataclass(frozen=True, kw_only=True)
+                class Expectations(stubs.StubExpectations[protocols.Scenario]):
+                    def check(
+                        self, *, notice_checker: protocols.NoticeChecker[protocols.Scenario]
+                    ) -> None:
+                        pass
+
+                return Expectations
+
+            assert not runner.runs.has_runs
+            runner.scenario.expects.failure = True
+
+            options = runners.RunOptions.create(runner)
+            with pytest.raises(AssertionError, match="expected assertions to fail"):
+                runner.run_and_check(setup_expectations=setup_expectations, options=options)
+
+            assert runner.runs.has_runs
