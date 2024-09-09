@@ -150,7 +150,7 @@ class TestScenarioFile:
         assert scenario_file.append(extra) is scenario_file
         assert called == [("parse", f"{original}\n{extra}"), ("modify", "one", modified)]
 
-    def test_it_can_append_content_with_different_dividier(self, tmp_path: pathlib.Path) -> None:
+    def test_it_can_append_content_with_different_divider(self, tmp_path: pathlib.Path) -> None:
         called: list[object] = []
         original = "original content!"
         extra = "extra content"
@@ -531,3 +531,64 @@ class TestUsingBuilder:
 
         builder.daemon_should_not_restart()
         assert not typing_scenario_runner.scenario.expects.daemon_restarted
+
+    def test_it_can_be_given_program_notice_changers(self, builder: Builder) -> None:
+        builder.on("main.py").set(
+            """
+            a: int = 1
+            # ^ REVEAL[a] ^ builtins.int
+            """
+        )
+        assert builder.scenario_runner.scenario.called == []
+
+        builder.run_and_check()
+        assert builder.scenario_runner.scenario.called == ["run"]
+
+        builder.add_program_notices(
+            lambda pm: notice_changers.BulkAdd(
+                root_dir=builder.scenario_runner.scenario.root_dir,
+                add={"other": {1: [notices.ProgramNotice.reveal_msg("builtins.str")]}},
+            )(pm)
+        )
+
+        builder.on("main.py").append(
+            """
+            a = "asdf"
+            # ^ ERROR(assignment) ^ Incompatible types in assignment (expression has type "str", variable has type "int")
+            """
+        )
+        assert builder.scenario_runner.scenario.called == ["run"]
+
+        expected = textwrap.dedent("""
+        > main.py
+          | ✓ 1: severity=note:: Revealed type is "builtins.int"
+          | ✓ 7: severity=error[assignment]:: Incompatible types in assignment (expression has type "str", variable has type "int")
+        > other
+          | ✘ 1:
+          | ✘ !! GOT  !! <NONE>
+          |   !! WANT !! severity=note:: Revealed type is "builtins.str"
+        """).strip()
+
+        with pytest.raises(AssertionError) as e:
+            builder.run_and_check()
+        assert builder.scenario_runner.scenario.called == ["run", "run"]
+
+        builder.on("main.py").expect(notices.AddRevealedTypes(name="a", revealed=["nope"]))
+        expected = textwrap.dedent("""
+        > main.py
+          | ✘ 3:
+          | ✓ severity=note:: Revealed type is "builtins.int"
+          | ✘ !! GOT  !! <NONE>
+          |   !! WANT !! severity=note:: Revealed type is "nope"
+          | ✓ 7: severity=error[assignment]:: Incompatible types in assignment (expression has type "str", variable has type "int")
+        > other
+          | ✘ 1:
+          | ✘ !! GOT  !! <NONE>
+          |   !! WANT !! severity=note:: Revealed type is "builtins.str"
+        """).strip()
+
+        with pytest.raises(AssertionError) as e:
+            builder.run_and_check()
+
+        assert str(e.value).strip() == expected
+        assert builder.scenario_runner.scenario.called == ["run", "run", "run"]
