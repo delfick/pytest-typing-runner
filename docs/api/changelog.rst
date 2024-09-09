@@ -21,6 +21,9 @@ Changelog
     * The behaviour of ``scenario.expects.failure`` is now that this indicates the run is expected
       to fail assertions rather than only that the run is expected to exit with exit code of
       non zero
+    * Make it possible for the builder to be given program notice changers so that followup runs
+      can be given baseline notices to start from before extracting notices from known files and
+      file level expectations.
 
 .. _release-0.5.0:
 

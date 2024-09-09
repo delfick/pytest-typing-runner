@@ -1,7 +1,7 @@
 import dataclasses
 import functools
 import pathlib
-from collections.abc import Callable, MutableMapping, Sequence
+from collections.abc import Callable, MutableMapping, MutableSequence, Sequence
 from typing import TYPE_CHECKING, Generic, cast
 
 from typing_extensions import Self, TypeVar, Unpack
@@ -200,6 +200,10 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
         init=False, default_factory=dict
     )
 
+    _program_notices_changers: MutableSequence[protocols.ProgramNoticesChanger] = (
+        dataclasses.field(init=False, default_factory=list)
+    )
+
     _options_modify: MutableMapping[None, protocols.RunOptionsModify[protocols.T_Scenario]] = (
         dataclasses.field(init=False, default_factory=dict)
     )
@@ -231,6 +235,10 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
                 path=path, root_dir=self.scenario_runner.scenario.root_dir
             )
         return self._known_files[path]
+
+    def add_program_notices(self, changer: protocols.ProgramNoticesChanger, /) -> Self:
+        self._program_notices_changers.append(changer)
+        return self
 
     def modify_options(
         self, options: protocols.RunOptions[protocols.T_Scenario]
@@ -310,6 +318,7 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
         *,
         options: protocols.RunOptions[protocols.T_Scenario],
         extra_setup: Callable[[], None] | None = None,
+        program_notices: protocols.ProgramNotices | None = None,
     ) -> protocols.ExpectationsMaker[protocols.T_Scenario]:
         """
         Used to generate the expectations the builder is aware of
@@ -323,7 +332,13 @@ class ScenarioBuilder(Generic[protocols.T_Scenario, T_CO_ScenarioFile]):
         root_dir = options.cwd
 
         def make_expectation() -> protocols.Expectations[protocols.T_Scenario]:
-            program_notices = options.scenario_runner.generate_program_notices()
+            nonlocal program_notices
+
+            if program_notices is None:
+                program_notices = options.scenario_runner.generate_program_notices()
+
+            for changer in self._program_notices_changers:
+                program_notices = changer(program_notices)
 
             for path, known in self._known_files.items():
                 location = root_dir / path
