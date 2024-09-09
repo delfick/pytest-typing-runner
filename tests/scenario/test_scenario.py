@@ -43,11 +43,13 @@ class TestScenarioRunner:
             default_program_runner_maker=program_runner_maker,
             runs=runs,
             cleaners=cleaners,
+            default_msg_maker=notices.PlainMsg.create,
         )
         assert runner.scenario is scenario
         assert runner.default_program_runner_maker is program_runner_maker
         assert runner.runs is runs
         assert runner.cleaners is cleaners
+        assert runner.default_msg_maker == notices.PlainMsg.create
 
     def test_it_has_create_classmethod(self, tmp_path: pathlib.Path) -> None:
         config = stubs.StubRunnerConfig()
@@ -131,6 +133,7 @@ class TestScenarioRunner:
             default_program_runner_maker=program_runner_maker,
             runs=scenarios.ScenarioRuns(scenario=scenario),
             cleaners=scenarios.RunCleaners(),
+            default_msg_maker=notices.RegexMsg.create,
         )
 
         options = runners.RunOptions.create(runner)
@@ -143,6 +146,22 @@ class TestScenarioRunner:
         self, runner: protocols.ScenarioRunner[protocols.Scenario]
     ) -> None:
         assert runner.generate_program_notices() == notices.ProgramNotices()
+
+    def test_it_can_oberride_msg_maker_to_program_notices(self, tmp_path: pathlib.Path) -> None:
+        config = stubs.StubRunnerConfig()
+
+        runner = scenarios.ScenarioRunner.create(
+            config=config,
+            root_dir=tmp_path,
+            scenario_maker=scenarios.Scenario.create,
+            scenario_runs_maker=scenarios.ScenarioRuns.create,
+            default_msg_maker=notices.RegexMsg.create,
+        )
+        assert runner.generate_program_notices().msg_maker == notices.RegexMsg.create
+        assert (
+            runner.generate_program_notices(msg_maker=notices.GlobMsg.create).msg_maker
+            == notices.GlobMsg.create
+        )
 
     class TestFileModification:
         def test_it_adds_to_the_runs(

@@ -275,7 +275,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
     runs: protocols.ScenarioRuns[protocols.T_Scenario]
     cleaners: protocols.RunCleaners
     default_program_runner_maker: protocols.ProgramRunnerMaker[protocols.T_Scenario]
-    default_msg_maker: protocols.NoticeMsgMaker = notices.PlainMsg.create
+    default_msg_maker: protocols.NoticeMsgMaker
 
     @classmethod
     def create(
@@ -285,6 +285,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         root_dir: pathlib.Path,
         scenario_maker: protocols.ScenarioMaker[protocols.T_Scenario],
         scenario_runs_maker: protocols.ScenarioRunsMaker[protocols.T_Scenario],
+        default_msg_maker: protocols.NoticeMsgMaker = notices.PlainMsg.create,
     ) -> Self:
         """
         Helpful classmethod that implements :protocol:`pytest_typing_runner.protocols.ScenarioRunnerMaker`
@@ -302,6 +303,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
             ),
             runs=scenario_runs_maker(scenario=scenario),
             cleaners=RunCleaners(),
+            default_msg_maker=default_msg_maker,
         )
 
     def prepare_scenario(self) -> None:
@@ -367,7 +369,7 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         self.runs.add_file_modification(path, action)
 
     def execute_static_checking(
-        self, options: protocols.RunOptions[protocols.T_Scenario]
+        self, *, options: protocols.RunOptions[protocols.T_Scenario]
     ) -> protocols.NoticeChecker[protocols.T_Scenario]:
         """
         Used to run the type checker.
@@ -449,7 +451,9 @@ class ScenarioRunner(Generic[protocols.T_Scenario]):
         """
         Returns a default implementation of :protocol:`pytest_typing_runner.ProgramNotices`
         """
-        return notices.ProgramNotices(msg_maker=self.default_msg_maker)
+        if msg_maker is None:
+            msg_maker = self.default_msg_maker
+        return notices.ProgramNotices(msg_maker=msg_maker)
 
 
 if TYPE_CHECKING:
