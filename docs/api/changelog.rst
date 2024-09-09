@@ -14,6 +14,9 @@ Changelog
       of creating the default strategy.
     * Order entry points when doing discovery of the typing strategies available to the
       CLI options.
+    * Ensure a current working directory can be depended on when using
+      ``file_changers.BasicPythonAssignmentChanger`` regardless of whether the file being
+      changed already exists or not.
 
 .. _release-0.5.0:
 

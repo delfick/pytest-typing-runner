@@ -1,11 +1,13 @@
 import ast
+import contextlib
 import dataclasses
 import os
 import pathlib
 import runpy
+import sys
 import tempfile
 import textwrap
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Protocol, TypeVar, cast
 
 from typing_extensions import assert_never
@@ -285,12 +287,30 @@ class BasicPythonAssignmentChanger:
 
         This helper is useful for modifying files like a Django settings file where the
         file only has module level assignments.
+    :param cwd:
+        The directory to be in and add to sys.path when determining the values
+        in the file
     """
 
     root_dir: pathlib.Path
+    cwd: pathlib.Path
     path: str
 
     variable_changers: Mapping[str, PythonVariableChanger]
+
+    @contextlib.contextmanager
+    def _in_cwd(self) -> Iterator[None]:
+        current_cwd = str(pathlib.Path.cwd())
+        want_cwd = str(self.cwd)
+        sys_path_before: list[str] = list(sys.path)
+        try:
+            os.chdir(want_cwd)
+            sys.path.append(want_cwd)
+            yield
+        finally:
+            os.chdir(current_cwd)
+            sys.path.clear()
+            sys.path.extend(sys_path_before)
 
     def after_change(self, *, default_content: str) -> str:
         """
@@ -313,13 +333,18 @@ class BasicPythonAssignmentChanger:
 
         if not location.exists():
             current = textwrap.dedent(default_content)
-            with tempfile.TemporaryDirectory() as directory:
-                tmp = pathlib.Path(directory) / "tmp.py"
+            with tempfile.NamedTemporaryFile(dir=self.cwd, delete=False, suffix=".py") as filename:
+                tmp = pathlib.Path(filename.name)
+            try:
                 tmp.write_text(current)
-                values = runpy.run_path(str(tmp))
+                with self._in_cwd():
+                    values = runpy.run_path(str(tmp))
+            finally:
+                tmp.unlink(missing_ok=True)
         else:
             current = location.read_text()
-            values = runpy.run_path(str(location))
+            with self._in_cwd():
+                values = runpy.run_path(str(location))
 
         parsed = ast.parse(current)
         variable_changers = self.variable_changers
