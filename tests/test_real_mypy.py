@@ -33,7 +33,7 @@ def typing_runner_config(
     strategy_maker = strategy_register.get_strategy(name=request.param[0])
     assert strategy_maker is not None
     return scenarios.RunnerConfig(
-        same_process=request.param[1], typing_strategy_maker=strategy_maker[1]
+        same_process=request.param[1], typing_strategy=strategy_maker[1]()
     )
 
 

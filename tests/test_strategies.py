@@ -17,7 +17,8 @@ class TestStrategyRegistry:
             registry.default
         assert registry.get_strategy(name="one") is None
 
-        maker_one = lambda: stubs.StubStrategy()
+        strategy_one = stubs.StubStrategy()
+        maker_one = lambda: strategy_one
 
         registry.register(
             name="one",
@@ -30,7 +31,8 @@ class TestStrategyRegistry:
         assert registry.default == "one"
         assert registry.get_strategy(name="one") == ("a thing\nand stuff", maker_one)
 
-        maker_two = lambda: stubs.StubStrategy()
+        strategy_two = stubs.StubStrategy()
+        maker_two = lambda: strategy_two
 
         registry.register(
             name="two",
@@ -44,11 +46,11 @@ class TestStrategyRegistry:
         assert registry.get_strategy(name="two") == ("another thing", maker_two)
 
         cli_info = registry.cli_option_info()
-        assert cli_info.str_to_maker("one") is maker_one
-        assert cli_info.str_to_maker("two") is maker_two
+        assert cli_info.str_to_strategy("one") is strategy_one
+        assert cli_info.str_to_strategy("two") is strategy_two
 
         with pytest.raises(argparse.ArgumentTypeError) as e:
-            cli_info.str_to_maker("three")
+            cli_info.str_to_strategy("three")
 
         assert str(e.value) == "Unknown strategy type: 'three', available are one, two"
 
@@ -75,10 +77,10 @@ class TestStrategyRegistry:
         assert registry.get_strategy(name="two") is None
 
         cli_info = registry.cli_option_info()
-        assert cli_info.str_to_maker("one") is maker_one
+        assert cli_info.str_to_strategy("one") is strategy_one
 
         with pytest.raises(argparse.ArgumentTypeError) as e:
-            cli_info.str_to_maker("two")
+            cli_info.str_to_strategy("two")
 
         assert str(e.value) == "Unknown strategy type: 'two', available are one"
 

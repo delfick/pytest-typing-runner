@@ -130,7 +130,7 @@ class TestRunOptions:
                     default_args=["stuff"], do_followups=False, program_short=self.program_short
                 )
 
-        config = stubs.StubRunnerConfig(typing_strategy_maker=Strategy)
+        config = stubs.StubRunnerConfig(typing_strategy=Strategy())
 
         runner = scenarios.ScenarioRunner[protocols.Scenario].create(
             config=config,

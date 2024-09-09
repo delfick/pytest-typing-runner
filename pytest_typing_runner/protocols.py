@@ -192,7 +192,7 @@ class RunnerConfig(Protocol):
         """
 
     @property
-    def typing_strategy_maker(self) -> StrategyMaker:
+    def typing_strategy(self) -> Strategy:
         """
         Set by the --typing-strategy option.
 
