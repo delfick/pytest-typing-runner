@@ -102,20 +102,20 @@ class MypyChecker(Generic[protocols.T_Scenario]):
 
     result: protocols.RunResult
     runner: protocols.ProgramRunner[protocols.T_Scenario]
+    run_options: protocols.RunOptions[protocols.T_Scenario]
 
     def _check_lines(self, lines: list[str], expected_notices: protocols.ProgramNotices) -> None:
+        options = self.run_options
         got = parse.MypyOutput.parse(
             [l.strip() for l in lines if l.strip()],
-            into=self.runner.options.scenario_runner.generate_program_notices(),
+            into=options.scenario_runner.generate_program_notices(),
             normalise=functools.partial(
-                self.runner.options.scenario_runner.normalise_program_runner_notice,
-                self.runner.options,
+                options.scenario_runner.normalise_program_runner_notice,
+                options,
             ),
-            root_dir=self.runner.options.cwd,
+            root_dir=options.cwd,
         )
-        expectations.compare_notices(
-            got.diff(root_dir=self.runner.options.cwd, other=expected_notices)
-        )
+        expectations.compare_notices(got.diff(root_dir=options.cwd, other=expected_notices))
 
     def check(self, expected_notices: protocols.ProgramNotices, /) -> None:
         """
@@ -178,16 +178,18 @@ class ExternalMypyRunner(Generic[protocols.T_Scenario]):
         """
         Run mypy as an external process.
         """
-        env = self._combine_env(self.options.environment_overrides)
+        options = self.options
+        env = self._combine_env(options.environment_overrides)
 
         completed = subprocess.run(
-            [*self.command, *self.options.args, *self.options.check_paths],
+            [*self.command, *options.args, *options.check_paths],
             capture_output=True,
-            cwd=self.options.cwd,
+            cwd=options.cwd,
             env=env,
         )
         return checker_kls(
             runner=self,
+            run_options=options,
             result=expectations.RunResult(
                 exit_code=completed.returncode,
                 stdout=completed.stdout.decode(),
@@ -217,6 +219,8 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
         Run mypy inside the existing process
         """
 
+        options = self.options
+
         @contextlib.contextmanager
         def saved_sys() -> Iterator[None]:
             previous_path = list(sys.path)
@@ -229,13 +233,13 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
 
         exit_code = -1
         with saved_sys(), pytest.MonkeyPatch().context() as monkey_patch:
-            for k, v in self.options.environment_overrides.items():
+            for k, v in options.environment_overrides.items():
                 if v is None:
                     monkey_patch.delenv(k, raising=False)
                 else:
                     monkey_patch.setenv(k, v)
 
-            if (cwd_str := str(self.options.cwd)) not in sys.path:
+            if (cwd_str := str(options.cwd)) not in sys.path:
                 sys.path.insert(0, cwd_str)
 
             stdout = io.StringIO()
@@ -243,9 +247,9 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
 
             cwd = pathlib.Path.cwd()
             try:
-                os.chdir(str(self.options.cwd))
+                os.chdir(str(options.cwd))
                 with stdout, stderr:
-                    exit_code = self._run_inprocess(self.options, stdout=stdout, stderr=stderr)
+                    exit_code = self._run_inprocess(options, stdout=stdout, stderr=stderr)
                     stdout_value = stdout.getvalue()
                     stderr_value = stderr.getvalue()
             finally:
@@ -253,6 +257,7 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
 
             return MypyChecker(
                 runner=self,
+                run_options=options,
                 result=expectations.RunResult(
                     exit_code=exit_code,
                     stdout=stdout_value,
@@ -378,12 +383,12 @@ class DaemonMypyChecker(MypyChecker[protocols.T_Scenario]):
         self.check_daemon_restarted(restarted=daemon_restarted)
 
     def check_daemon_restarted(self, *, restarted: bool) -> None:
-        if self.runner.options.scenario_runner.scenario.expects.daemon_restarted:
+        if self.run_options.scenario_runner.scenario.expects.daemon_restarted:
             # We expected a restart, assert we did actually restart
             assert restarted, "Expect the daemon to have restarted"
 
             # Followup run should not restart the daemon again
-            self.runner.options.scenario_runner.scenario.expects.daemon_restarted = False
+            self.run_options.scenario_runner.scenario.expects.daemon_restarted = False
         else:
             assert not restarted, "Did not expect the daemon to restart"
 
@@ -434,6 +439,7 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
 
         return checker_kls(
             runner=self,
+            run_options=checker.run_options,
             result=expectations.RunResult(
                 exit_code=exit_code, stdout=checker.result.stdout, stderr=checker.result.stderr
             ),

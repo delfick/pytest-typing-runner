@@ -17,6 +17,7 @@ Changelog
     * Ensure a current working directory can be depended on when using
       ``file_changers.BasicPythonAssignmentChanger`` regardless of whether the file being
       changed already exists or not.
+    * Allow runners to modify the run options and pass that along in the notice checker.
 
 .. _release-0.5.0:
 

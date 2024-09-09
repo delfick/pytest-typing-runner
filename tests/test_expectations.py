@@ -53,7 +53,9 @@ class TestExpectations:
                 called.append(("check", expected_notices))
 
         notice_checker = NoticeChecker(
-            result=stubs.StubRunResult(exit_code=0, stderr="", stdout=""), runner=program_runner
+            result=stubs.StubRunResult(exit_code=0, stderr="", stdout=""),
+            runner=program_runner,
+            run_options=options,
         )
         expected_notices = notice_changers.ModifyFile(
             location=tmp_path / "one",
@@ -86,6 +88,7 @@ class TestExpectations:
 
         notice_checker = stubs.StubNoticeChecker(
             result=stubs.StubRunResult(exit_code=0, stderr="hello", stdout=""),
+            run_options=options,
             runner=program_runner,
         )
 
@@ -113,6 +116,7 @@ class TestExpectations:
 
         notice_checker = stubs.StubNoticeChecker(
             result=stubs.StubRunResult(exit_code=0, stderr="", stdout=""),
+            run_options=options,
             runner=program_runner,
         )
 
@@ -140,6 +144,7 @@ class TestExpectations:
 
         notice_checker = stubs.StubNoticeChecker(
             result=stubs.StubRunResult(exit_code=99, stderr="", stdout=""),
+            run_options=options,
             runner=program_runner,
         )
 
