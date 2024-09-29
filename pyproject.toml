@@ -29,13 +29,21 @@ repository = "https://github.com/delfick/pytest-typing-runner"
 changelog = "https://pytest-typing-runner.readthedocs.io/en/latest/api/changelog.html"
 docs = "https://pytest-typing-runner.readthedocs.io"
 
+[tool.uv]
+dev-dependencies = [
+    "tools",
+    "pytest_typing_runner_test_driver",
+]
+
+[tool.uv.sources]
+tools = { workspace = true }
+pytest-typing-runner-test-driver = { workspace = true }
+
+[tool.uv.workspace]
+members = ["tools", "helpers"]
+
 [project.entry-points.pytest_typing_runner_strategies]
 a_register = "pytest_typing_runner.strategies:register_default_strategies"
-
-[project.optional-dependencies]
-tests = [
-    "pytest==8.2.2",
-]
 
 [project.entry-points.pytest11]
 pytest_typing_runner = "pytest_typing_runner.collect"

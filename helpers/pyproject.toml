@@ -9,6 +9,10 @@ license = { text = "MIT" }
 authors = [
     { name = "Stephen Moore", email = "stephen@delfick.com" },
 ]
+dependencies = [
+    "pytest==8.2.2",
+    "mypy==1.11.2",
+]
 
 [tool.hatch.version]
 path = "pytest_typing_runner_test_driver/version.py"
