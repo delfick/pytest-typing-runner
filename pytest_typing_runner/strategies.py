@@ -10,7 +10,7 @@ from typing_extensions import Self
 from . import errors, protocols, runners
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class NoStrategiesRegistered(errors.PyTestTypingRunnerException):
     """
     Raised when the registry is used with no registered strategies

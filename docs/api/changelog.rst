@@ -3,9 +3,15 @@
 Changelog
 ---------
 
+.. _release-0.6.1:
+
+0.6.1 - TBD
+    * Made the errors not be frozen dataclasses. Being frozen dataclasses means pytest catching
+      them would complain about not being able to set ``__traceback__`` on them
+
 .. _release-0.6.0:
 
-0.5.1 - 9 September 2024
+0.6.0 - 9 September 2024
     * Made FileParser do mypy style inline comments by default
     * It is now possible to create notices for comparison using regexes and globs.
     * Added a ``typing_scenario_root_dir`` fixture for configurating where all the files

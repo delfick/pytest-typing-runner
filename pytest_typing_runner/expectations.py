@@ -8,7 +8,7 @@ from typing_extensions import Self
 from . import errors, notices, protocols
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class NoticesAreDifferent(errors.PyTestTypingRunnerException, AssertionError):
     difference: str
 

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast
 from . import errors, protocols
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class MissingNotices(errors.PyTestTypingRunnerException):
     """
     Raised when notices are expected to be somewhere they are not

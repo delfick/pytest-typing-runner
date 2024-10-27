@@ -17,14 +17,14 @@ from . import errors, protocols
 T_Assign = TypeVar("T_Assign", ast.Assign, ast.AnnAssign)
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class FileChangerException(errors.PyTestTypingRunnerException):
     """
     Parent exception for all file_changer exceptions
     """
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class LocationOutOfBounds(FileChangerException):
     """
     Risen when a location is outside of a specific parent directory
@@ -37,7 +37,7 @@ class LocationOutOfBounds(FileChangerException):
         return f"Expected location ({self.location}) to be under root_dir ({self.root_dir})"
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class LocationDoesNotExist(FileChangerException):
     """
     Risen when a location that should exist does not
@@ -49,7 +49,7 @@ class LocationDoesNotExist(FileChangerException):
         return f"Expected location ({self.location}) to exist"
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class LocationIsNotDirectory(FileChangerException):
     """
     Risen when a location that should be a directory is not a directory
