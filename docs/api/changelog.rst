@@ -5,7 +5,7 @@ Changelog
 
 .. _release-0.6.1:
 
-0.6.1 - TBD
+0.6.1 - 27 October 2024
     * Made the errors not be frozen dataclasses. Being frozen dataclasses means pytest catching
       them would complain about not being able to set ``__traceback__`` on them
 
