@@ -1,5 +1,9 @@
 version = 1
 requires-python = ">=3.10"
+resolution-markers = [
+    "python_full_version < '3.13'",
+    "python_full_version >= '3.13'",
+]
 
 [manifest]
 members = [
@@ -562,7 +566,7 @@ wheels = [
 
 [[package]]
 name = "pytest-typing-runner"
-version = "0.6"
+version = "0.6.1"
 source = { editable = "." }
 
 [package.dev-dependencies]
