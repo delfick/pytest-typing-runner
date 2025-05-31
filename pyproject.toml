@@ -29,8 +29,8 @@ repository = "https://github.com/delfick/pytest-typing-runner"
 changelog = "https://pytest-typing-runner.readthedocs.io/en/latest/api/changelog.html"
 docs = "https://pytest-typing-runner.readthedocs.io"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "tools",
     "pytest_typing_runner_test_driver",
 ]
