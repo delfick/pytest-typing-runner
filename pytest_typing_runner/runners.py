@@ -166,8 +166,7 @@ class ExternalMypyRunner(Generic[protocols.T_Scenario]):
         env = dict(os.environ)
         for k, v in overrides.items():
             if v is None:
-                if k in env:
-                    del env[k]
+                env.pop(k, None)
             else:
                 env[k] = v
         return env
@@ -270,7 +269,7 @@ class SameProcessMypyRunner(Generic[protocols.T_Scenario]):
         Determine if installed version of mypy is older than 1.8.0
         """
         version = importlib.metadata.version("mypy")
-        m = re.match("^1\.(\d+)\.\d+.*", version)
+        m = re.match(r"^1\.(\d+)\.\d+.*", version)
         if m is None:
             return False
 
@@ -457,9 +456,9 @@ class ExternalDaemonMypyRunner(ExternalMypyRunner[protocols.T_Scenario]):
             completed = subprocess.run(
                 [*self.command, "kill"], capture_output=True, cwd=cwd, env=env
             )
-            assert (
-                completed.returncode == 0
-            ), f"Failed to stop dmypy: {completed.returncode}\n{completed.stdout.decode()}\n{completed.stderr.decode()}"
+            assert completed.returncode == 0, (
+                f"Failed to stop dmypy: {completed.returncode}\n{completed.stdout.decode()}\n{completed.stderr.decode()}"
+            )
 
 
 if TYPE_CHECKING:
