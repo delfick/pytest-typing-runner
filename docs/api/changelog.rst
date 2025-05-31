@@ -5,7 +5,7 @@ Changelog
 
 .. _release-0.6.2:
 
-0.6.1 - TBD
+0.6.1 - 31 May 2025
     * Removed python warnings about invalid escape sequences
 
 .. _release-0.6.1:
