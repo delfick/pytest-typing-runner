@@ -124,9 +124,9 @@ class ScenarioFile:
         location = self.root_dir / self.path
         original = location.read_text()
         replacement, file_notices = parser(original, into=file_notices)
-        assert (
-            replacement == original
-        ), f"Contents of '{self.path}' were not transformed when written to disk"
+        assert replacement == original, (
+            f"Contents of '{self.path}' were not transformed when written to disk"
+        )
 
         for instruction in self._overrides:
             changed = instruction(file_notices)

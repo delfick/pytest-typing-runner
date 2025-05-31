@@ -614,8 +614,7 @@ class FileNotices:
         replacement = dict(self.by_line_number)
         for line_number, line_notices in notices.items():
             if line_notices is None:
-                if line_number in replacement:
-                    del replacement[line_number]
+                replacement.pop(line_number, None)
             else:
                 replacement[line_number] = line_notices
 
@@ -792,8 +791,7 @@ class ProgramNotices:
         replacement = dict(self.notices)
         for location, file_notices in notices.items():
             if file_notices is None:
-                if location in replacement:
-                    del replacement[location]
+                replacement.pop(location, None)
             else:
                 replacement[location] = file_notices
 
