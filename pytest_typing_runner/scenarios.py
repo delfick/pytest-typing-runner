@@ -212,7 +212,7 @@ class ScenarioRuns(Generic[protocols.T_Scenario]):
         Yields lines for a pytest report indented and with a heading for each run.
         """
         for i, run in enumerate(self._runs):
-            yield f":: Run {i+1}"
+            yield f":: Run {i + 1}"
             for line in run.for_report():
                 yield f"   | {line}"
 
