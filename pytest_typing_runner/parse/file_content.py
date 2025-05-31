@@ -75,7 +75,7 @@ def _make_msg(
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class InlineCommentMatch(CommentMatch):
-    """
+    r"""
     Represents the information for a single inline mypy stubtest style comment
 
     Implementation of :protocol:`pytest_typing_runner.parse.protocols.CommentMatch`
