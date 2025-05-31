@@ -271,7 +271,7 @@ class TestBasicPythonAssignmentChanger:
             variable_changers={
                 "ONE": Change(new_value=ast.Constant(3)),
                 "TWO": Change(new_value=ast.List(elts=[ast.Constant(4), ast.Constant(5)])),
-                "THREE": Change(new_value=ast.Str("trees")),
+                "THREE": Change(new_value=ast.Constant("trees")),
             },
         )
 
